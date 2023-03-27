@@ -371,4 +371,6 @@ Araux=sistemaArbol(caracteristicas[1],caracteristicas[2])
 KNNaux=sistemaKNN(caracteristicas[1],caracteristicas[2])
 
 
-plot(ploteable.(RRNNAAaux[2]),label ="RRNNAA Test");plot!(ploteable.(RRNNAAaux[3]),label ="RRNNAA Training");plot!(ploteable.(RRNNAAaux[4]),label ="RRNNAA Validation")
+plot(ploteable.(RRNNAAaux[2]),label ="RRNNAA Test");
+plot!(ploteable.(RRNNAAaux[3]),label ="RRNNAA Training");
+plot!(ploteable.(RRNNAAaux[4]),label ="RRNNAA Validation");
