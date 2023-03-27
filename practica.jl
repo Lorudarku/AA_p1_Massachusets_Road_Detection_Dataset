@@ -7,60 +7,39 @@ using Plots
 using Statistics
 using DelimitedFiles
 using ScikitLearn
+using JLD2
+using Images
 
 const tamWindow = 15;
 const saltoVentana = 5;
 
+function imageToColorArray(image::Array{RGB{Normed{UInt8,8}},2})
+    matrix = Array{Float64, 3}(undef, size(image,1), size(image,2), 3)
+    matrix[:,:,1] = convert(Array{Float64,2}, red.(image));
+    matrix[:,:,2] = convert(Array{Float64,2}, green.(image));
+    matrix[:,:,3] = convert(Array{Float64,2}, blue.(image));
+    return matrix;
+end;
+imageToColorArray(image::Array{RGBA{Normed{UInt8,8}},2}) = imageToColorArray(RGB.(image));
+
 function mediaDesviacion(ventana)
     #Mirar como funcionan las funciones ##################################################################################################
-    media = mean(ventana[:]);
-    desviacion = std(ventana[:]);
+    media = mean(ventana);
+    desviacion = std(ventana);
 
     [media;desviacion]
 end
 
 
 #Calculamos las ventanas para cada imagen
-function transformar(ruta)
-    image = load(ruta);
-    outMD = [];
-    x = 1;
-    salto = 0;
-
-    #Bucle ventana por toda la imagen
-
-    #Calculamos la ventana para la iteracion x
-    window = image[x:tamWindow + salto, x:tamWindow + salto];
-    pixelCentro = ceil(tamWindow / 2) + salto;
-    mD = [];
-
-    #Convertimos la ventana en un array[1:3] RGB
-    #wn = convert(Array{RGB{Normed{UInt8,8}},2}, window);
-    matrizRojos = red.(window);
-    matrizVerde = green.(window);
-    matrizAzul = blue.(window);
-
+function transformar(matrizRojo,matrizVerde,matrizAzul)
 
     #Calculamos la media y desviacion tipica para cada componente de color
-    mDR = mediaDesviacion(matrizRojos);
+    mDR = mediaDesviacion(matrizRojo);
     mDG = mediaDesviacion(matrizVerde);
     mDB = mediaDesviacion(matrizAzul);
 
-    #Guardamos la media y desviacion tipica de cada componente en un array[1:3] de una ventana
-    #md[R[m,d],G[m,d],B[m,d]]
-    push!(mD,mDR);
-    push!(mD,mDG);
-    push!(mD,mDB);
-
-    #Guardamos para cada ventana su media y desviacion tipica
-    #outMD[md,md,md]
-    push!(outMD,mD);
-    print(outMD);
-
-    salto = salto + saltoVentana; 
-    x = x + saltoVentana;
-    #fin bucle
-    [outMD]
+    [mDR,mDG,mDB]
 end
 
 #Sacamos las caracteristicas
@@ -69,42 +48,55 @@ function estraccionCaracteristicas()
     targets = [];
     itc = readdir("./pruebas");
     gtc = readdir("./gtp");
-    tam = length(itc);
-    i=1;
-    ant=-1;
-    for c in itc
-        #inputs[1*][2*][3*][4*]
-        #Dim 1: Dimension con las imagenes totales
-        #Dim 2: Dimension con todas las ventanas para cada imagen
-        #Dim 3: Dimension con las componentes RGB con su media y desviacion tipica cada uno
-        #Dim 4: Dimension con la media y desviacion tipica
-        push!(inputs,transformar("./pruebas/"*c));
+    pixelCentro = ceil(tamWindow / 2);
+    l=0;
 
-        porcentaxe=floor((i/tam)*100);
-        if (porcentaxe!=ant)
-            println(porcentaxe,"%");
-            ant=porcentaxe;
+    for images in itc
+
+        image = load("./pruebas/"*images);
+        matrix = imageToColorArray(image);
+        #image = convert(Array{Float64,2}, image);
+        #Bucle ventana por toda la imagen
+        saltoX = 0;
+        l = round(Int,sqrt(length(image)))
+
+        for x in 1:l
+            saltoY = 0;
+
+            for y in 1:l
+                #Calculamos las ventanas para cada imagen
+                #println("X-->",tamWindow + saltoX)
+                #println("Y-->",tamWindow + saltoY)
+                windowR = matrix[x:tamWindow + saltoX, y:tamWindow + saltoY,1];
+                windowG = matrix[x:tamWindow + saltoX, y:tamWindow + saltoY,2];
+                windowB = matrix[x:tamWindow + saltoX, y:tamWindow + saltoY,3];
+                
+                
+                
+                #inputs[1*][2*][3*]
+                #Dim 1: Dimension con la componente R con su media y desviacion tipica
+                #Dim 2: Dimension con la componente G con su media y desviacion tipica
+                #Dim 3: Dimension con la componente B con su media y desviacion tipica
+
+                push!(inputs,transformar(windowR,windowG,windowB));
+
+                y = y + saltoVentana;
+                saltoY = saltoY + saltoVentana;
+                if((tamWindow + saltoY)>round(Int,sqrt(length(image))))
+                    break
+                end
+
+            end
+            x = x + saltoVentana;
+            saltoX = saltoX + saltoVentana;
+            if((tamWindow + saltoX)>round(Int,sqrt(length(image))))
+                break
+            end
         end
-        i=i+1;
+        
     end
 
     println("Imagenes cargadas");
-    i=1;
-    ant=-1;
-    for c in gtc
-        #targets[1*][2*]
-        #Dim 1: Dimension con las imagenes totales
-        #Dim 2: Dimension el valor para las ventanas de cada imagen
-        push!(targets,"./gtp/"*c);
-        
-        porcentaxe = floor((i/tam)*100);
-        if (porcentaxe!=ant)
-            println(porcentaxe,"%");
-            ant=porcentaxe;
-        end
-        i=i+1;
-    end
-    println("Gt cargado");
 
     inputs=hcat(inputs...);
     targets=hcat(targets...);
