@@ -46,7 +46,7 @@ end
 #Sacanse as caracteristicas de todos os audios das carpetas "pia" e "gac" en unha ruta determinada e devolvense as matrices de inputs e targets
 function estraccionCaracteristicas(ruta)
     inputs=[];
-    targets=[]
+    targets=[];
     piano=readdir(ruta*"/pia");
     guitarra=readdir(ruta*"/gac");
     tam=length(piano)+length(guitarra);
