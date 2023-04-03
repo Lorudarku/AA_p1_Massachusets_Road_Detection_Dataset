@@ -257,7 +257,7 @@ function sistemaRRNNAA(inputs,targets,topology,minerror, maxIt)
         trainingIn[i,:] = normalizar(trainingIn[i,:],max,min);
         testIn[i,:] = normalizar(testIn[i,:],max,min);
     end
-
+    #####################################################Revisado hasta aqui#############################################################################
     for i=1:size(trainingTar,1)
 
         max=maximum(trainingTar[i,:]);
