@@ -189,15 +189,35 @@ function estraccionCaracteristicas()
     [permutedims(inputs),permutedims(targets)]
 end
 
-# Devolver 0 o 1
-function normalizaraux(p, a)
-    if p==a
-        1.
-    else
-        0.
-    end
-end
+# Dividir los arrays inputs y targets en otros 2 para entrenamiento y test
+function holdOut(inputs,targets)
+    in=[];
+    testIn=[];
+    tar=[];
+    testTar=[];
 
+    aux = bitrand(roundsize(inputs,1));
+    l = length(inputs);
+    trestLenght = round(Int,l*0.1)
+
+    for i in 1:l
+
+        if length(testIn) <= trestLenght
+            if aux[i] == 1
+                push!(in,inputs[i,:]);
+                push!(tar,targets[i,:]);
+            else
+                push!(testIn,inputs[i,:]);
+                push!(testTar,targets[i,:]);
+            end
+        else
+            push!(in,inputs[i,:]);
+            push!(tar,targets[i,:]);
+        end
+        
+    end
+    [in,tar,testIn,testTar]
+end
 # Funcion usada para transformar o array de strings nun array de targets validos para a Arn
 function normalizarCaracteristicas(normalizar)
     result=[];
@@ -214,9 +234,95 @@ function normalizarCaracteristicas(normalizar)
     hcat(result...);
 end
 
+
+function normalizar(value,max,min)
+    return ((value-min)/(max-min))
+end
+
+#  Entradas, targets , topologia, tasa de error minima y ciclos maximos
+function sistemaRRNNAA(inputs,targets,topology,minerror, maxIt)
+
+    #Randomizar y normalizar
+    aux = holdOut(inputs,targets);
+    trainingIn = hcat(aux[1]...);
+    trainingTar = hcat(aux[2]...);
+    testIn = hcat(aux[3]...);
+    testTar=hcat(aux[4]...);
+    ann = Chain();
+
+    for i in 1:size(trainingIn,1)
+
+        max = maximum(trainingIn[i,:]);
+        min = minimum(trainingIn[i,:]);
+        trainingIn[i,:] = normalizar(trainingIn[i,:],max,min);
+        testIn[i,:] = normalizar(testIn[i,:],max,min);
+    end
+
+    for i=1:size(trainingTar,1)
+
+        max=maximum(trainingTar[i,:]);
+        min=minimum(trainingTar[i,:]);
+        trainingTar[i,:]=normalizar.(trainingTar[i,:],max,min);
+        testTar[i,:]=normalizar.(testTar[i,:],max,min);
+    end
+
+    aux=holdOut(trainingIn',trainingTar');
+    trainingIn=hcat(aux[1]...);
+    trainingTar=hcat(aux[2]...);
+    validationIn=hcat(aux[3]...);
+    validationTar=hcat(aux[4]...);
+    eTest=[];
+    eTraining=[];
+    eValidation=[];
+    min=1;
+    actual=0;
+    #Creación Arn
+    numInputsLayer=size(inputs,2);
+    for numOutputsLayer = topology
+        ann = Chain(ann..., Dense(numInputsLayer, numOutputsLayer, σ) );
+        numInputsLayer = numOutputsLayer;
+    end;
+    numOutputs=size(targets,2);
+    if (numOutputs == 1)
+        ann = Chain(ann..., Dense(numInputsLayer, 1, σ));
+    else
+        ann = Chain(ann..., Dense(numInputsLayer, numOutputs, identity));
+        ann = Chain(ann..., softmax);
+    end;
+    loss(x, y) = crossentropy(ann(x), y);
+    #Entrenamento e calculo de erros
+    Flux.train!(loss, params(ann), [(trainingIn, trainingTar)], ADAM(0.01));
+    e=confusionMatrix(round.(ann(trainingIn))',trainingTar')
+    push!(eTraining,e);
+    e=confusionMatrix(round.(ann(testIn))',testTar')
+    push!(eTest,e);
+    e=confusionMatrix(round.(ann(validationIn))',validationTar')
+    push!(eValidation,e);
+    best=deepcopy(ann);
+    while (e[2]>parada) & (actual<maxMellora)
+        Flux.train!(loss, params(ann), [(trainingIn, trainingTar)], ADAM(0.01));
+        e=confusionMatrix(round.(ann(trainingIn))',trainingTar')
+        push!(eTraining,e);
+        e=confusionMatrix(round.(ann(testIn))',testTar')
+        push!(eTest,e);
+        e=confusionMatrix(round.(ann(validationIn))',validationTar')
+        push!(eValidation,e);
+        if e[2]<min
+            min=e[2];
+            actual=0;
+            best=deepcopy(ann);
+        else
+            actual=actual + 1;
+        end
+    end;
+    #Devolvese a mellor Arn e os erros de cada fase do entrenamento de Test, Entrenamento e Validación
+    [best,eTest,eTraining,eValidation,e]
+end
+
 caracteristicas = estraccionCaracteristicas();
 caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
 
+RRNNAA = RRNNAA(caracteristicas[1],caracteristicas[2],[25],0.15,100)
 
 
 
