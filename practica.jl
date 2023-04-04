@@ -11,7 +11,7 @@ using JLD2
 using Images
 
 const tamWindow = 15;
-const saltoVentana = 5;
+const saltoVentana = 150;
 
 function imageToColorArray(image::Array{RGB{Normed{UInt8,8}},2})
     matrix = Array{Float64, 3}(undef, size(image,1), size(image,2), 3)
@@ -39,7 +39,7 @@ function transformar(matrizRojo,matrizVerde,matrizAzul)
     mDG = mediaDesviacion(matrizVerde);
     mDB = mediaDesviacion(matrizAzul);
 
-    [mDR,mDG,mDB]
+    [mDR[1],mDR[2],mDG[1],mDG[2],mDB[1],mDB[2]]
 end
 
 #Calculamos si un punto central es carretera o no
@@ -158,12 +158,6 @@ function estraccionCaracteristicas()
                     push!(targets,"negativo");
 
                 end
-                
-                #inputs[1*][2*][3*]
-                #Dim 1: Dimension con la componente R con su media y desviacion tipica
-                #Dim 2: Dimension con la componente G con su media y desviacion tipica
-                #Dim 3: Dimension con la componente B con su media y desviacion tipica
-
 
                 posy = posy + saltoVentana;
                 saltoY = saltoY + saltoVentana;
@@ -196,10 +190,10 @@ function holdOut(inputs,targets)
     tar=[];
     testTar=[];
 
-    aux = bitrand(roundsize(inputs,1));
-    l = length(inputs);
-    trestLenght = round(Int,l*0.1)
+    aux = bitrand(size(inputs,1));
 
+    l = length(aux);
+    trestLenght = round(Int,l*0.1)
     for i in 1:l
 
         if length(testIn) <= trestLenght
@@ -216,7 +210,14 @@ function holdOut(inputs,targets)
         end
         
     end
-    [in,tar,testIn,testTar]
+
+    in = hcat(in...);
+    tar = hcat(tar...);
+    testIn = hcat(in...);
+    testTar = hcat(in...);
+
+
+    [permutedims(in),permutedims(tar),permutedims(testIn),permutedims(testTar)]
 end
 # Funcion usada para transformar o array de strings nun array de targets validos para a Arn
 function normalizarCaracteristicas(normalizar)
@@ -231,7 +232,9 @@ function normalizarCaracteristicas(normalizar)
         end
   
     end;
-    hcat(result...);
+
+    result=hcat(result...);
+    permutedims(result)
 end
 
 
@@ -240,56 +243,68 @@ function normalizar(value,max,min)
 end
 
 #  Entradas, targets , topologia, tasa de error minima y ciclos maximos
-function sistemaRRNNAA(inputs,targets,topology,minerror, maxIt)
+function RRNNAA(inputs,targets,topology,minerror, maxIt)
 
     #Randomizar y normalizar
     aux = holdOut(inputs,targets);
-    trainingIn = hcat(aux[1]...);
-    trainingTar = hcat(aux[2]...);
-    testIn = hcat(aux[3]...);
-    testTar=hcat(aux[4]...);
+    trainingIn = aux[1];
+    trainingTar = aux[2];
+    testIn = aux[3];
+    testTar = aux[4];
+
     ann = Chain();
 
     for i in 1:size(trainingIn,1)
 
         max = maximum(trainingIn[i,:]);
         min = minimum(trainingIn[i,:]);
-        trainingIn[i,:] = normalizar(trainingIn[i,:],max,min);
-        testIn[i,:] = normalizar(testIn[i,:],max,min);
+        trainingIn[i,:] = normalizar.(trainingIn[i,:],max,min);
+        testIn[i,:] = normalizar.(testIn[i,:],max,min);
     end
-    #####################################################Revisado hasta aqui#############################################################################
     for i=1:size(trainingTar,1)
 
-        max=maximum(trainingTar[i,:]);
-        min=minimum(trainingTar[i,:]);
-        trainingTar[i,:]=normalizar.(trainingTar[i,:],max,min);
-        testTar[i,:]=normalizar.(testTar[i,:],max,min);
+        max = maximum(trainingTar[i,:]);
+        min = minimum(trainingTar[i,:]);
+        trainingTar[i,:] = normalizar.(trainingTar[i,:],max,min);
+        testTar[i,:] = normalizar.(testTar[i,:],max,min);
     end
 
-    aux=holdOut(trainingIn',trainingTar');
-    trainingIn=hcat(aux[1]...);
-    trainingTar=hcat(aux[2]...);
-    validationIn=hcat(aux[3]...);
-    validationTar=hcat(aux[4]...);
-    eTest=[];
-    eTraining=[];
-    eValidation=[];
-    min=1;
-    actual=0;
+#=
+    aux = holdOut(trainingIn',trainingTar');
+    
+    trainingIn = aux[1];
+    trainingTar = aux[2];
+    testIn = aux[3];
+    testTar = aux[4];
+    ########Comprobaciones=#
+
+    @assert (size(inputs,1)==size(targets,1)) "Las matrices de entradas y
+        salidas deseadas no tienen el mismo número de filas" 
+    ########
+    eTest = [];
+    eTraining = [];
+    eValidation = [];
+    min = 1;
+    actual = 0;
+    #####################################################Revisado hasta aqui#############################################################################
+
+    #=
     #Creación Arn
-    numInputsLayer=size(inputs,2);
+    numInputsLayer = size(inputs,2);
     for numOutputsLayer = topology
         ann = Chain(ann..., Dense(numInputsLayer, numOutputsLayer, σ) );
         numInputsLayer = numOutputsLayer;
     end;
-    numOutputs=size(targets,2);
+    numOutputs = size(targets,2);
     if (numOutputs == 1)
         ann = Chain(ann..., Dense(numInputsLayer, 1, σ));
     else
         ann = Chain(ann..., Dense(numInputsLayer, numOutputs, identity));
         ann = Chain(ann..., softmax);
     end;
+
     loss(x, y) = crossentropy(ann(x), y);
+
     #Entrenamento e calculo de erros
     Flux.train!(loss, params(ann), [(trainingIn, trainingTar)], ADAM(0.01));
     e=confusionMatrix(round.(ann(trainingIn))',trainingTar')
@@ -316,13 +331,21 @@ function sistemaRRNNAA(inputs,targets,topology,minerror, maxIt)
         end
     end;
     #Devolvese a mellor Arn e os erros de cada fase do entrenamento de Test, Entrenamento e Validación
-    [best,eTest,eTraining,eValidation,e]
+    [best,eTest,eTraining,eValidation,e] =#
 end
 
 caracteristicas = estraccionCaracteristicas();
-caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
+#=
+println("input: ",size(caracteristicas[1]));
+println("input: ",size(caracteristicas[1],1));
+println("input: ",size(caracteristicas[1],2));
+println(caracteristicas[1][1,:])=#
 
-RRNNAA = RRNNAA(caracteristicas[1],caracteristicas[2],[25],0.15,100)
+    
+caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
+#println(caracteristicas[2][1])
+
+redNeuronal = RRNNAA(caracteristicas[1],caracteristicas[2],[25],0.15,100)
 
 
 
