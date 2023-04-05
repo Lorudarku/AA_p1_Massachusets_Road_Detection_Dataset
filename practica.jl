@@ -165,7 +165,6 @@ function estraccionCaracteristicas()
 
                 posy = posy + saltoVentana;
                 saltoY = saltoY + saltoVentana;
-                i += 1;
 
                 if((tamWindow + saltoY)>round(Int,sqrt(length(gt))))
                     break
@@ -335,8 +334,8 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt)
     validationTar = hcat(aux[4]...);
     ########Comprobaciones
     println("Dimensiones ':",size(trainingIn'));
-    println("Inputs ':",size(trainingIn',1));
-    println("Ventanas :",size(trainingIn',2));
+    println("Inputs ':",size(trainingIn',2));
+    println("Ventanas :",size(trainingIn',1));
     
     ########
     errTest = [];
