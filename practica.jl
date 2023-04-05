@@ -4,6 +4,7 @@ using Random
 using Flux
 using Flux.Losses
 using Plots
+using StatsPlots
 using Statistics
 using DelimitedFiles
 using ScikitLearn
@@ -11,7 +12,7 @@ using JLD2
 using Images
 
 const tamWindow = 15;
-const saltoVentana = 150;
+const saltoVentana = 10;
 
 function imageToColorArray(image::Array{RGB{Normed{UInt8,8}},2})
     matrix = Array{Float64, 3}(undef, size(image,1), size(image,2), 3)
@@ -23,7 +24,6 @@ end;
 imageToColorArray(image::Array{RGBA{Normed{UInt8,8}},2}) = imageToColorArray(RGB.(image));
 
 function mediaDesviacion(ventana)
-    #Mirar como funcionan las funciones ##################################################################################################
     media = mean(ventana);
     desviacion = std(ventana);
 
@@ -60,17 +60,18 @@ end
 function estraccionCaracteristicas()
     inputs = [];
     targets = [];
-    itc = readdir("./pruebas");
-    gtc = readdir("./gtp");
+    itc = readdir("./it_c");
+    gtc = readdir("./gt_c");
     tam = length(itc);
     l=0;
-    i = 0;
+    i = 0.;
 
     for images in itc
-
-        println("Cargando Imagenes: ",(i/tam*100),"%");
-
-        image = load("./pruebas/"*images);
+        v = (i/tam*100);
+        i+=1;
+        println("Cargando Imagenes: $v%");
+        ruta = joinpath("./it_c/" ,images)
+        image = load(ruta);
         matrix = imageToColorArray(image);
         #image = convert(Array{Float64,2}, image);
         #Bucle ventana por toda la imagen
@@ -112,17 +113,20 @@ function estraccionCaracteristicas()
             end
         end
         
-        i=+;
-        
+       
     end
 
     println("Imagenes cargadas 100%, cargando gt...");
-    tam = 0;
-    i = 0;
+    i = 0.;
+    v = 0.;
 
     for gts in gtc
 
-        gt = load("./gtp/"*gts);
+        v = (i/tam*100);
+        i+=1;        
+        println("Cargando Imagenes: $v%");
+        ruta = joinpath("./gt_c/" ,gts)
+        gt = load(ruta);
         matrixgt = imageToColorArray(gt);
         #image = convert(Array{Float64,2}, image);
         #Bucle ventana por toda la imagen
@@ -174,7 +178,6 @@ function estraccionCaracteristicas()
                 break
             end
         end
-        tam=+;        
     end
     println("Gt cargado 100%.");
 
@@ -210,14 +213,20 @@ function holdOut(inputs,targets)
         end
         
     end
-
+#=
     in = hcat(in...);
     tar = hcat(tar...);
     testIn = hcat(in...);
     testTar = hcat(in...);
+    permitedims(in);
+=#
+    println(size(in));
+    @assert (size(in,1)==size(tar,1)) "Las matrices de entradas y
+        salidas deseadas no tienen el mismo número de filas"
+    @assert (size(testIn,1)==size(testTar,1)) "Las matrices de entradas y
+        salidas deseadas no tienen el mismo número de filas"
 
-
-    [permutedims(in),permutedims(tar),permutedims(testIn),permutedims(testTar)]
+    [in,tar,testIn,testTar]
 end
 # Funcion usada para transformar o array de strings nun array de targets validos para a Arn
 function normalizarCaracteristicas(normalizar)
@@ -237,101 +246,150 @@ function normalizarCaracteristicas(normalizar)
     permutedims(result)
 end
 
-
-function normalizar(value,max,min)
-    return ((value-min)/(max-min))
+function normalizar(v,media,des)
+    (v-media)/des
 end
 
+function vPositivos(a,b)
+    (a==true) & (b==true)
+end
+
+function fPositivos(a,b)
+    (a==true) & (b==false)
+end
+
+function vNegativos(a,b)
+    (a==false) & (b==false)
+end
+
+function fNegativos(a,b)
+    (a==false) & (b==true)
+end
+
+function confusionMatrix(in,tar)
+
+    vp = sum(vPositivos.(in,tar));
+    fp = sum(fPositivos.(in,tar));
+    vn = sum(vNegativos.(in,tar));
+    fn = sum(fNegativos.(in,tar));
+
+    matrizConfusion = Matrix{Int64}(undef, 2, 2)
+    matrizConfusion[1,1]=vn;
+    matrizConfusion[1,2]=fp;
+    matrizConfusion[2,1]=fn;
+    matrizConfusion[2,2]=vp;
+    precision = (vn+vp)/(vn+vp+fn+fp);
+    tasaE = (fn+fp)/(vn+vp+fn+fp);
+    sensibilidad = vp/(fn+vp);
+    especificidad = vn/(fp+vn);
+    valorPP = vp/(vp+fp);
+    valorPN = vn/(fn+vn);
+    fScore = 2/((1/valorPP)+(1/sensibilidad));
+    [precision , tasaE , sensibilidad , especificidad , valorPP , valorPN , fScore , matrizConfusion]
+end
+
+function ploteable(t)
+    t[2]
+end
+
+function normalizar(a,u)
+    a>u
+end
+
+function confusionMatrix(in,tar,umbral)
+    aux = normalizar.(in,umbral);
+    confusionMatrix(aux,tar)
+end
 #  Entradas, targets , topologia, tasa de error minima y ciclos maximos
 function RRNNAA(inputs,targets,topology,minerror, maxIt)
 
     #Randomizar y normalizar
     aux = holdOut(inputs,targets);
-    trainingIn = aux[1];
-    trainingTar = aux[2];
-    testIn = aux[3];
-    testTar = aux[4];
+    trainingIn = hcat(aux[1]...);
+    trainingTar = hcat(aux[2]...);
+    testIn = hcat(aux[3]...);
+    testTar = hcat(aux[4]...);
+
+    println("Dimensiones :",size(trainingIn));
+    println("Ventanas :",size(trainingIn,1));
+    println("Inputs :",size(trainingIn,2));
+    println("Sin normalizar: ",trainingIn[:,1]);
 
     ann = Chain();
 
     for i in 1:size(trainingIn,1)
 
-        max = maximum(trainingIn[i,:]);
-        min = minimum(trainingIn[i,:]);
-        trainingIn[i,:] = normalizar.(trainingIn[i,:],max,min);
-        testIn[i,:] = normalizar.(testIn[i,:],max,min);
-    end
-    for i=1:size(trainingTar,1)
-
-        max = maximum(trainingTar[i,:]);
-        min = minimum(trainingTar[i,:]);
-        trainingTar[i,:] = normalizar.(trainingTar[i,:],max,min);
-        testTar[i,:] = normalizar.(testTar[i,:],max,min);
+        media = mean(trainingIn[i,:]);
+        des = std(trainingIn[i,:]);
+        trainingIn[i,:] = normalizar.(trainingIn[i,:],media,des);
+        testIn[i,:] = normalizar.(testIn[i,:],media,des);
     end
 
-#=
+    println("Normalizado: ",trainingIn[:,1]);
+
     aux = holdOut(trainingIn',trainingTar');
     
-    trainingIn = aux[1];
-    trainingTar = aux[2];
-    testIn = aux[3];
-    testTar = aux[4];
-    ########Comprobaciones=#
-
-    @assert (size(inputs,1)==size(targets,1)) "Las matrices de entradas y
-        salidas deseadas no tienen el mismo número de filas" 
+    trainingIn = hcat(aux[1]...);
+    trainingTar = hcat(aux[2]...);
+    validationIn = hcat(aux[3]...);
+    validationTar = hcat(aux[4]...);
+    ########Comprobaciones
+    println("Dimensiones ':",size(trainingIn'));
+    println("Inputs ':",size(trainingIn',1));
+    println("Ventanas :",size(trainingIn',2));
+    
     ########
-    eTest = [];
-    eTraining = [];
-    eValidation = [];
+    errTest = [];
+    errTraining = [];
+    errValidation = [];
     min = 1;
-    actual = 0;
-    #####################################################Revisado hasta aqui#############################################################################
-
-    #=
+    it = 0;
+    #####################################################Revisado hasta aqui#############################################################################    
     #Creación Arn
     numInputsLayer = size(inputs,2);
     for numOutputsLayer = topology
         ann = Chain(ann..., Dense(numInputsLayer, numOutputsLayer, σ) );
         numInputsLayer = numOutputsLayer;
     end;
-    numOutputs = size(targets,2);
-    if (numOutputs == 1)
-        ann = Chain(ann..., Dense(numInputsLayer, 1, σ));
-    else
-        ann = Chain(ann..., Dense(numInputsLayer, numOutputs, identity));
-        ann = Chain(ann..., softmax);
-    end;
+    ann = Chain(ann..., Dense(numInputsLayer, 1, σ));
+    println("RN: ",ann);
 
     loss(x, y) = crossentropy(ann(x), y);
 
-    #Entrenamento e calculo de erros
-    Flux.train!(loss, params(ann), [(trainingIn, trainingTar)], ADAM(0.01));
-    e=confusionMatrix(round.(ann(trainingIn))',trainingTar')
-    push!(eTraining,e);
-    e=confusionMatrix(round.(ann(testIn))',testTar')
-    push!(eTest,e);
-    e=confusionMatrix(round.(ann(validationIn))',validationTar')
-    push!(eValidation,e);
-    best=deepcopy(ann);
-    while (e[2]>parada) & (actual<maxMellora)
-        Flux.train!(loss, params(ann), [(trainingIn, trainingTar)], ADAM(0.01));
-        e=confusionMatrix(round.(ann(trainingIn))',trainingTar')
-        push!(eTraining,e);
-        e=confusionMatrix(round.(ann(testIn))',testTar')
-        push!(eTest,e);
-        e=confusionMatrix(round.(ann(validationIn))',validationTar')
-        push!(eValidation,e);
-        if e[2]<min
-            min=e[2];
-            actual=0;
-            best=deepcopy(ann);
+    #Entrenamiento y calculo del error
+    Flux.train!(loss, Flux.params(ann), [(trainingIn, trainingTar)], ADAM(0.01));
+    err = confusionMatrix(round.(ann(trainingIn))',trainingTar')
+    push!(errTraining,err);
+
+    err = confusionMatrix(round.(ann(testIn))',testTar')
+    push!(errTest,err);
+
+    err = confusionMatrix(round.(ann(validationIn))',validationTar')
+    push!(errValidation,err);
+    best = deepcopy(ann);
+
+    while ((err[2] > minerror) && (it < maxIt))
+        Flux.train!(loss, Flux.params(ann), [(trainingIn, trainingTar)], ADAM(0.01));
+        err = confusionMatrix(round.(ann(trainingIn))',trainingTar')
+        push!(errTraining,err);
+
+        err = confusionMatrix(round.(ann(testIn))',testTar')
+        push!(errTest,err);
+
+        err = confusionMatrix(round.(ann(validationIn))',validationTar')
+        push!(errValidation,err);
+
+        if err[2] < min
+            min = err[2];
+            it=0;
+            best = deepcopy(ann);
         else
-            actual=actual + 1;
+            it = it + 1;
         end
     end;
+    #==#
     #Devolvese a mellor Arn e os erros de cada fase do entrenamento de Test, Entrenamento e Validación
-    [best,eTest,eTraining,eValidation,e] =#
+    [best,errTest,errTraining,errValidation,err] 
 end
 
 caracteristicas = estraccionCaracteristicas();
@@ -347,9 +405,11 @@ caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
 
 redNeuronal = RRNNAA(caracteristicas[1],caracteristicas[2],[25],0.15,100)
 
+# Graficar los errores
+g = plot();
 
+plot!(ploteable.(redNeuronal[2]), label="Test Error");
+plot!(ploteable.(redNeuronal[3]), label="Training Error")
+plot!(ploteable.(redNeuronal[4]), label="Validation Error")
 
-
-
-
-
+display(g);
