@@ -11,8 +11,8 @@ using ScikitLearn
 using JLD2
 using Images
 
-const tamWindow = 10;
-const saltoVentana = 3;
+const tamWindow = 20;
+const saltoVentana = 10;
 const dirIt = "./p1/";
 const dirGt = "./p2/";
 
@@ -46,12 +46,12 @@ function transformar(matrizRojo,matrizVerde,matrizAzul)
 end
 
 #Calculamos si un punto central es carretera o no
-function esCarretera(matrizRojo,matrizVerde,matrizAzul)
+function esCarretera(windowC)
     carretera = false;
     pixelCentro = round(Int,ceil(tamWindow / 2));
-    pixelCentroUnaDimension = round(Int,tamWindow*(pixelCentro-1)+pixelCentro);
+    #pixelCentroUnaDimension = round(Int,tamWindow*(pixelCentro-1)+pixelCentro);
 
-    if((matrizRojo[pixelCentroUnaDimension] == 1) & (matrizVerde[pixelCentroUnaDimension] == 1) & (matrizAzul[pixelCentroUnaDimension] == 1))
+    if(windowC[pixelCentro,pixelCentro] != 0)
         carretera = true
         #println("Pixel: ",matrizRojo[pixelCentroUnaDimension]," ",matrizVerde[pixelCentroUnaDimension]," ",matrizAzul[pixelCentroUnaDimension])
         #println(carretera)
@@ -63,13 +63,17 @@ end
 function estraccionCaracteristicas()
     inputs = [];
     targets = [];
+    positivos = [];
+    negativos = [];
     itc = readdir(dirIt);
     gtc = readdir(dirGt);
     tam = length(itc);
+    carretera = 0;
+    noCarretera = 0;
     l=0;
     i = 0.;
 
-    for images in itc
+    for (images,gts) in zip(itc,gtc)
         v = (i/tam*100);
         i+=1;
         println("Cargando Imagenes: $v%");
@@ -77,6 +81,12 @@ function estraccionCaracteristicas()
         ruta = joinpath(dirIt,images)
         image = load(ruta);
         matrix = imageToColorArray(image);
+
+        ruta2 = dirGt*"/"
+        ruta2 = joinpath(dirGt ,gts)#"0000gray.tiff"
+        gt = load(ruta2);
+        matrixgt = Gray.(gt)
+
         #image = convert(Array{Float64,2}, image);
         #Bucle ventana por toda la imagen
         saltoX = 0;
@@ -94,20 +104,26 @@ function estraccionCaracteristicas()
                 #println("Y-->",tamWindow + saltoY)
                 windowR = matrix[posx:tamWindow + saltoX, posy:tamWindow + saltoY,1];
                 windowG = matrix[posx:tamWindow + saltoX, posy:tamWindow + saltoY,2];
-                windowB = matrix[posx:tamWindow + saltoX, posy:tamWindow + saltoY,3];
+                windowB = matrix[posx:tamWindow + saltoX, posy:tamWindow + saltoY,3];              
+                windowC= matrixgt[posx:tamWindow + saltoX, posy:tamWindow + saltoY];
                 
-                #inputs[1*][2*][3*]
-                #Dim 1: Dimension con la componente R con su media y desviacion tipica
-                #Dim 2: Dimension con la componente G con su media y desviacion tipica
-                #Dim 3: Dimension con la componente B con su media y desviacion tipica
+                #inputs[1:6]
 
-                push!(inputs,transformar(windowR,windowG,windowB));
-    
-                posy = posy + saltoVentana;
-                saltoY = saltoY + saltoVentana;
-                if((tamWindow + saltoY)>round(Int,sqrt(length(image))))
-                    break
+                if (esCarretera(windowC) == true)
+                    carretera +=1;
+                    push!(inputs,transformar(windowR,windowG,windowB));
+                    #save("./positivos/"*name, imgsave)
+                    push!(targets,"positivo");
+        
+                else
+                    if(carretera*1.2 > noCarretera)
+                        noCarretera +=1;
+                        #save("./negativos/"*name, imgsave)
+                        push!(inputs,transformar(windowR,windowG,windowB));
+                        push!(targets,"negativo");
+                    end
                 end
+
 
             end
             posx = posx + saltoVentana;
@@ -119,73 +135,34 @@ function estraccionCaracteristicas()
         
        
     end
-
-    println("Imagenes cargadas 100%, cargando gt...");
-    i = 0.;
-    v = 0.;
-
-    for gts in gtc
-
-        v = (i/tam*100);
-        i+=1;        
-        println("Cargando Imagenes: $v%");
-        ruta = dirGt*"/"
-        ruta = joinpath(dirGt ,gts)
-        gt = load(ruta);
-        matrixgt = imageToColorArray(gt);
-        #image = convert(Array{Float64,2}, image);
-        #Bucle ventana por toda la imagen
-        saltoX = 0;
-        posy = 1;
-        posx = 1;
-        l = round(Int,sqrt(length(gt)));
-
-        for x in 1:l
-            saltoY = 0;
-            posy = 1;
-
-            for y in 1:l
-                #println("Cargando Gt $tam: ",(i/(l*l/saltoVentana/saltoVentana)*100),"%");
-
-                #Calculamos las ventanas para cada imagen
-                #println("X-->",tamWindow + saltoX)
-                #println("Y-->",tamWindow + saltoY)
-                windowR = matrixgt[posx:tamWindow + saltoX, posy:tamWindow + saltoY,1];
-                windowG = matrixgt[posx:tamWindow + saltoX, posy:tamWindow + saltoY,2];
-                windowB = matrixgt[posx:tamWindow + saltoX, posy:tamWindow + saltoY,3];
-                imgsave = RGB.(windowR, windowG, windowB);
-
-                #println("$posx","-$(tamWindow + saltoX)","y $posy","-$(tamWindow + saltoY)");
-
-                name = "ventana_$posx.$posy.tif"
-                if (esCarretera(windowR,windowG,windowB) == true)
-                    #save("./positivos/"*name, imgsave)
-                    push!(targets,"positivo");
-        
-                else
-                    #save("./negativos/"*name, imgsave)
-                    push!(targets,"negativo");
-
-                end
-
-                posy = posy + saltoVentana;
-                saltoY = saltoY + saltoVentana;
-
-                if((tamWindow + saltoY)>round(Int,sqrt(length(gt))))
-                    break
-                end
-
-            end
-            posx = posx + saltoVentana;
-            saltoX = saltoX + saltoVentana;
-            if((tamWindow + saltoX)>round(Int,sqrt(length(gt))))
-                break
-            end
+    println("Carreteras: $carretera  | No carreteras: $noCarretera")
+    println("Imagenes cargadas 100%");
+    #=l = size(targets,1)
+    for i in 1:l
+        if(targets[i] == "positivo")
+            push!(positivos,[inputs[i],targets[i]])
+        else 
+            push!(negativos,[inputs[i],targets[i]])
         end
     end
+    println("A ",size(positivos))
+    println("B ",size(negativos))
+    c = vcat(positivos, negativos)
+
+    l = size(positivos,1) + size(negativos,1)
+    for aux in 1:c
+        if(aux[2] == "positivo")
+            push!(positivos,[inputs[i],targets[i]])
+        else 
+            push!(negativos,[inputs[i],targets[i]])
+        end
+    end=#
+    
+    #shuffle!(aux,size(aux,1))
+    
     println("Gt cargado 100%.");
-    inputs=hcat(inputs...);
-    targets=hcat(targets...);
+    inputs = hcat(inputs...);
+    targets = hcat(targets...);
     [permutedims(inputs),permutedims(targets)]
 end
 
@@ -195,11 +172,11 @@ function holdOut(inputs,targets)
     testIn=[];
     tar=[];
     testTar=[];
-
+    
     aux = bitrand(size(inputs,1));
 
     l = length(aux);
-    trestLenght = round(Int,l*0.2)
+    trestLenght = round(Int,l*0.1)
     for i in 1:l
 
         if length(testIn) <= trestLenght
@@ -312,7 +289,8 @@ function confusionMatrix(in,tar,umbral)
 end
 #  Entradas, targets , topologia, tasa de error minima y ciclos maximos
 function RRNNAA(inputs,targets,topology,minerror, maxIt)
-
+    #Cambio la tasa de error minimo a la tasa de precision minima
+    precis = 100 - minerror
     #Randomizar y normalizar
     aux = holdOut(inputs,targets);
     trainingIn = hcat(aux[1]...);
@@ -358,7 +336,7 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt)
     errTest = [];
     errTraining = [];
     errValidation = [];
-    min = 1;
+    min = 100;
     it = 0;
     #####################################################Revisado hasta aqui#############################################################################    
     #Creación Arn
@@ -383,9 +361,9 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt)
     err = confusionMatrix(round.(ann(validationIn))',validationTar')
     push!(errValidation,err);
     best = deepcopy(ann);
-    println("Error: ",err[2] )
+    println("Precision: ",err[1] )
 
-    while ((err[2] > minerror) && (it < maxIt))
+    while ((err[1] < precis) && (it < maxIt))
         Flux.train!(loss, Flux.params(ann), [(trainingIn, trainingTar)], ADAM(0.005));
         err = confusionMatrix(round.(ann(trainingIn))',trainingTar')
         push!(errTraining,err);
@@ -395,10 +373,10 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt)
 
         err = confusionMatrix(round.(ann(validationIn))',validationTar')
         push!(errValidation,err);
-        println("Error: ",err[2] )
+        println("Precision: ",err[1] )
 
-        if err[2] < min
-            min = err[2];
+        if err[1] > min
+            min = err[1];
             it = 0;
             best = deepcopy(ann);
         else
@@ -415,7 +393,7 @@ caracteristicas = estraccionCaracteristicas();
     
 caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
 
-redNeuronal = RRNNAA(caracteristicas[1],caracteristicas[2],[6 12 3],0.029,100)
+redNeuronal = RRNNAA(caracteristicas[1],caracteristicas[2],[12 12 6],0.029,10)
 
 # Graficar los errores
 g = plot();
