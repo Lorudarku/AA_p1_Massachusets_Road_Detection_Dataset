@@ -11,8 +11,8 @@ using ScikitLearn
 using JLD2
 using Images
 
-const tamWindow = 20;
-const saltoVentana = 10;
+const tamWindow = 7;
+const saltoVentana = 2;
 const dirIt = "./p1/";
 const dirGt = "./p2/";
 
@@ -306,14 +306,14 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt)
 
 
     ann = Chain();
-
+#==#
     for i in 1:size(trainingIn,1)
-        max = maximum(trainingIn[i,:]);
-        min = minimum(trainingIn[i,:]);
-        #media = mean(trainingIn[i,:]);
-        #des = std(trainingIn[i,:]);
-        trainingIn[i,:] = normalizar1.(trainingIn[i,:],max,min);
-        testIn[i,:] = normalizar1.(testIn[i,:],max,min);
+        #max = maximum(trainingIn[i,:]);
+        #min = minimum(trainingIn[i,:]);
+        media = mean(trainingIn[i,:]);
+        des = std(trainingIn[i,:]);
+        trainingIn[i,:] = normalizar1.(trainingIn[i,:],media,des);
+        testIn[i,:] = normalizar1.(testIn[i,:],media,des);
     end
 
     println("Normalizado: ",trainingIn[:,1]);
@@ -336,7 +336,7 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt)
     errTest = [];
     errTraining = [];
     errValidation = [];
-    min = 100;
+    min = 0;
     it = 0;
     #####################################################Revisado hasta aqui#############################################################################    
     #Creación Arn
@@ -351,7 +351,7 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt)
     loss(x, y) = binarycrossentropy(ann(x), y);
 
     #Entrenamiento y calculo del error
-    Flux.train!(loss, Flux.params(ann), [(trainingIn, trainingTar)], ADAM(0.005));
+    Flux.train!(loss, Flux.params(ann), [(trainingIn, trainingTar)], ADAM(0.003));
     err = confusionMatrix(round.(ann(trainingIn))',trainingTar')
     push!(errTraining,err);
 
@@ -364,28 +364,30 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt)
     println("Precision: ",err[1] )
 
     while ((err[1] < precis) && (it < maxIt))
-        Flux.train!(loss, Flux.params(ann), [(trainingIn, trainingTar)], ADAM(0.005));
+        Flux.train!(loss, Flux.params(ann), [(trainingIn, trainingTar)], ADAM(0.003));
         err = confusionMatrix(round.(ann(trainingIn))',trainingTar')
         push!(errTraining,err);
 
-        err = confusionMatrix(round.(ann(testIn))',testTar')
-        push!(errTest,err);
-
         err = confusionMatrix(round.(ann(validationIn))',validationTar')
         push!(errValidation,err);
+
+        err = confusionMatrix(round.(ann(testIn))',testTar')
+        push!(errTest,err);
         println("Precision: ",err[1] )
 
         if err[1] > min
             min = err[1];
             it = 0;
             best = deepcopy(ann);
+            println(it);
+
         else
             it = it + 1;
             println(it);
         end
     end;
     
-    println(errTest)
+    println(minimum(ploteable.(errTest)))
     [best,errTest,errTraining,errValidation,err] 
 end
 
@@ -393,7 +395,7 @@ caracteristicas = estraccionCaracteristicas();
     
 caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
 
-redNeuronal = RRNNAA(caracteristicas[1],caracteristicas[2],[12 12 6],0.029,10)
+redNeuronal = RRNNAA(caracteristicas[1],caracteristicas[2],[12 6],0.22,200)
 
 # Graficar los errores
 g = plot();
