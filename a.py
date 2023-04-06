@@ -7,14 +7,14 @@ import os
 
 def main():
 
-    folder = './it/'
+    folder = './gt/'
 
     for filename in os.listdir(folder):
 
         name = filename[:-5]
         print(name)
 
-        inImage = cv2.imread('./it/' + filename)
+        inImage = cv2.imread('./gt/' + filename)
         outImage = cv2.cvtColor(inImage, cv2.COLOR_BGR2GRAY) 
 
         (x, y) = np.shape(outImage)
@@ -30,7 +30,7 @@ def main():
 
 
                 #######################################################
-                cv2.imwrite('./it_c/' + name + str(i) + '_' + str(j) + '.tiff', roi)
+                cv2.imwrite('./gt_c/' + name + str(i) + '_' + str(j) + '.tiff', roi)
                 #######################################################
 
 main()

@@ -11,10 +11,10 @@ using ScikitLearn
 using JLD2
 using Images
 
-const tamWindow = 15;
-const saltoVentana = 10;
-const dirIt = "./it_c";
-const dirGt = "./gt_c/";
+const tamWindow = 10;
+const saltoVentana = 3;
+const dirIt = "./p1/";
+const dirGt = "./p2/";
 
 
 function imageToColorArray(image::Array{RGB{Normed{UInt8,8}},2})
@@ -102,7 +102,7 @@ function estraccionCaracteristicas()
                 #Dim 3: Dimension con la componente B con su media y desviacion tipica
 
                 push!(inputs,transformar(windowR,windowG,windowB));
-
+    
                 posy = posy + saltoVentana;
                 saltoY = saltoY + saltoVentana;
                 if((tamWindow + saltoY)>round(Int,sqrt(length(image))))
@@ -184,7 +184,6 @@ function estraccionCaracteristicas()
         end
     end
     println("Gt cargado 100%.");
-
     inputs=hcat(inputs...);
     targets=hcat(targets...);
     [permutedims(inputs),permutedims(targets)]
@@ -200,7 +199,7 @@ function holdOut(inputs,targets)
     aux = bitrand(size(inputs,1));
 
     l = length(aux);
-    trestLenght = round(Int,l*0.1)
+    trestLenght = round(Int,l*0.2)
     for i in 1:l
 
         if length(testIn) <= trestLenght
@@ -217,14 +216,7 @@ function holdOut(inputs,targets)
         end
         
     end
-#=
-    in = hcat(in...);
-    tar = hcat(tar...);
-    testIn = hcat(in...);
-    testTar = hcat(in...);
-    permitedims(in);
-=#
-    println(size(in));
+
     @assert (size(in,1)==size(tar,1)) "Las matrices de entradas y
         salidas deseadas no tienen el mismo número de filas"
     @assert (size(testIn,1)==size(testTar,1)) "Las matrices de entradas y
@@ -232,7 +224,8 @@ function holdOut(inputs,targets)
 
     [in,tar,testIn,testTar]
 end
-# Funcion usada para transformar o array de strings nun array de targets validos para a Arn
+
+# Funcion usada para transformar a un formato valido
 function normalizarCaracteristicas(normalizar)
     result=[];
     p = "positivo";
@@ -287,7 +280,7 @@ function confusionMatrix(in,tar)
     matrizConfusion[2,1] = fn;
     matrizConfusion[2,2] = vp;
 
-    if((vn != 0))
+    if((vp != 0) || (vn != 0))
         print("vp ",vp, " fp ",fp," vn ",vn, " fn ",fn);
         println();
     end
@@ -337,8 +330,8 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt)
     ann = Chain();
 
     for i in 1:size(trainingIn,1)
-        max=maximum(trainingIn[i,:]);
-        min=minimum(trainingIn[i,:]);
+        max = maximum(trainingIn[i,:]);
+        min = minimum(trainingIn[i,:]);
         #media = mean(trainingIn[i,:]);
         #des = std(trainingIn[i,:]);
         trainingIn[i,:] = normalizar1.(trainingIn[i,:],max,min);
@@ -377,7 +370,7 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt)
     ann = Chain(ann..., Dense(numInputsLayer, 1, σ));
     println("RN: ",ann);
 
-    loss(x, y) = crossentropy(ann(x), y);
+    loss(x, y) = binarycrossentropy(ann(x), y);
 
     #Entrenamiento y calculo del error
     Flux.train!(loss, Flux.params(ann), [(trainingIn, trainingTar)], ADAM(0.005));
@@ -390,6 +383,7 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt)
     err = confusionMatrix(round.(ann(validationIn))',validationTar')
     push!(errValidation,err);
     best = deepcopy(ann);
+    println("Error: ",err[2] )
 
     while ((err[2] > minerror) && (it < maxIt))
         Flux.train!(loss, Flux.params(ann), [(trainingIn, trainingTar)], ADAM(0.005));
@@ -401,33 +395,27 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt)
 
         err = confusionMatrix(round.(ann(validationIn))',validationTar')
         push!(errValidation,err);
+        println("Error: ",err[2] )
 
         if err[2] < min
             min = err[2];
-            it=0;
+            it = 0;
             best = deepcopy(ann);
         else
             it = it + 1;
             println(it);
         end
     end;
-    #==#
-   
+    
+    println(errTest)
     [best,errTest,errTraining,errValidation,err] 
 end
 
 caracteristicas = estraccionCaracteristicas();
-#=
-println("input: ",size(caracteristicas[1]));
-println("input: ",size(caracteristicas[1],1));
-println("input: ",size(caracteristicas[1],2));
-println(caracteristicas[1][1,:])=#
-
     
 caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
-#println(caracteristicas[2][1])
 
-redNeuronal = RRNNAA(caracteristicas[1],caracteristicas[2],[10],0.15,15)
+redNeuronal = RRNNAA(caracteristicas[1],caracteristicas[2],[6 12 3],0.029,100)
 
 # Graficar los errores
 g = plot();
