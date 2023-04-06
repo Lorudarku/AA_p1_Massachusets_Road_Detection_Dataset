@@ -13,8 +13,8 @@ using Images
 
 const tamWindow = 7;
 const saltoVentana = 2;
-const dirIt = "./p1/";
-const dirGt = "./p2/";
+const dirIt = "./positivos/";
+const dirGt = "./pruebas/";
 
 
 function imageToColorArray(image::Array{RGB{Normed{UInt8,8}},2})
@@ -297,6 +297,8 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt)
     trainingTar = hcat(aux[2]...);
     testIn = hcat(aux[3]...);
     testTar = hcat(aux[4]...);
+    println(size(trainingIn))
+    println(size(testIn))
 
     println("Dimensiones :",size(trainingIn));
     println("Ventanas :",size(trainingIn,1));
@@ -312,10 +314,11 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt)
         #min = minimum(trainingIn[i,:]);
         media = mean(trainingIn[i,:]);
         des = std(trainingIn[i,:]);
-        trainingIn[i,:] = normalizar1.(trainingIn[i,:],media,des);
-        testIn[i,:] = normalizar1.(testIn[i,:],media,des);
+        trainingIn[i,:] = normalizar2.(trainingIn[i,:],media,des);
+        testIn[i,:] = normalizar2.(testIn[i,:],media,des);
     end
-
+    println(size(trainingIn))
+    println(size(testIn))
     println("Normalizado: ",trainingIn[:,1]);
     println("Normalizado: ",testIn[:,1]);
 
@@ -395,23 +398,40 @@ end
 
 function sistemaSVM(inputs,targets)
     aux=holdOut(inputs,targets);
-    trainingIn=hcat(aux[1]...);
-    trainingTar=hcat(aux[2]...);
-    testIn=hcat(aux[3]...);
-    testTar=hcat(aux[4]...);
+    trainingIn = hcat(aux[1]...);
+    trainingTar = hcat(aux[2]...);
+    testIn = hcat(aux[3]...);
+    testTar = hcat(aux[4]...);
+
+    p = unique(targets[:,:])
+    println(p)
 
     for i=1:size(trainingIn,1)
         media=mean(trainingIn[i,:]);
         des=std(trainingIn[i,:]);
-        trainingIn[i,:] = normalizar.(trainingIn[i,:],media,des);
-        testIn[i,:]=normalizar.(testIn[i,:],media,des);
+        trainingIn[i,:] = normalizar2.(trainingIn[i,:],media,des);
+        testIn[i,:]=normalizar2.(testIn[i,:],media,des);
     end
+#=
+    trainingIn = hcat(trainingIn')
+    trainingTar = hcat(trainingTar')
+    testIn = hcat(testIn')
+    testTar = hcat(testTar')=#
+    println(size(trainingIn))
+    println(size(trainingTar))
+    println(size(testIn))
+    println(size(testTar))
+
 
     model = SVC(kernel="rbf", degree=3, gamma=2, C=1);
     fit!(model, trainingIn', trainingTar');
 
-    eTraining=confusionMatrix(predict(model,trainingIn'),trainingTar');
-    eTest=confusionMatrix(predict(model,testIn'),testTar');
+    eTraining = confusionMatrix(predict(model,trainingIn'),trainingTar');
+    eTest = confusionMatrix(predict(model,testIn'),testTar');
+
+    println(eTest)
+    println(eTest[2])
+
     [model,eTest,eTraining]
 end
 
@@ -462,17 +482,20 @@ caracteristicas = estraccionCaracteristicas();
     
 caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
 
-redNeuronal = RRNNAA(caracteristicas[1],caracteristicas[2],[12 6],0.22,200)
+#redNeuronal = RRNNAA(caracteristicas[1],caracteristicas[2],[12 6],0.22,200)
 
-SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2])#=
-Araux = sistemaArbol(caracteristicas[1],caracteristicas[2])
+SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2])
+#=Araux = sistemaArbol(caracteristicas[1],caracteristicas[2])
 KNNaux = sistemaKNN(caracteristicas[1],caracteristicas[2])=#
+println(size(SVMaux))
 
 # Graficar los errores
 g = plot();
-
+#=
 plot!(ploteable.(redNeuronal[2]), label="Test Error");
 plot!(ploteable.(redNeuronal[3]), label="Training Error")
-plot!(ploteable.(redNeuronal[4]), label="Validation Error")
+plot!(ploteable.(redNeuronal[4]), label="Validation Error")=#
+plot!(ploteable.(SVMaux[2]), label="Test Error")
+plot!(ploteable.(SVMaux[3]), label="Training Error")
 
 display(g);
