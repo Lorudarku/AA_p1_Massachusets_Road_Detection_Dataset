@@ -412,16 +412,6 @@ function sistemaSVM(inputs,targets)
         trainingIn[i,:] = normalizar2.(trainingIn[i,:],media,des);
         testIn[i,:]=normalizar2.(testIn[i,:],media,des);
     end
-#=
-    trainingIn = hcat(trainingIn')
-    trainingTar = hcat(trainingTar')
-    testIn = hcat(testIn')
-    testTar = hcat(testTar')=#
-    println(size(trainingIn))
-    println(size(trainingTar))
-    println(size(testIn))
-    println(size(testTar))
-
 
     model = SVC(kernel="rbf", degree=3, gamma=2, C=1);
     fit!(model, trainingIn', trainingTar');
@@ -429,8 +419,9 @@ function sistemaSVM(inputs,targets)
     eTraining = confusionMatrix(predict(model,trainingIn'),trainingTar');
     eTest = confusionMatrix(predict(model,testIn'),testTar');
 
-    println(eTest)
-    println(eTest[2])
+    println("MatrizConfusion Test",eTest)
+    println("Donde el error es: ",eTest[2])
+
 
     [model,eTest,eTraining]
 end
@@ -487,15 +478,13 @@ caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
 SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2])
 #=Araux = sistemaArbol(caracteristicas[1],caracteristicas[2])
 KNNaux = sistemaKNN(caracteristicas[1],caracteristicas[2])=#
-println(size(SVMaux))
 
 # Graficar los errores
 g = plot();
 #=
 plot!(ploteable.(redNeuronal[2]), label="Test Error");
 plot!(ploteable.(redNeuronal[3]), label="Training Error")
-plot!(ploteable.(redNeuronal[4]), label="Validation Error")=#
-plot!(ploteable.(SVMaux[2]), label="Test Error")
-plot!(ploteable.(SVMaux[3]), label="Training Error")
-
+plot!(ploteable.(redNeuronal[4]), label="Validation Error")
 display(g);
+=#
+
