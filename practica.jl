@@ -391,11 +391,82 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt)
     [best,errTest,errTraining,errValidation,err] 
 end
 
+@sk_import svm: SVC
+
+function sistemaSVM(inputs,targets)
+    aux=holdOut(inputs,targets);
+    trainingIn=hcat(aux[1]...);
+    trainingTar=hcat(aux[2]...);
+    testIn=hcat(aux[3]...);
+    testTar=hcat(aux[4]...);
+
+    for i=1:size(trainingIn,1)
+        media=mean(trainingIn[i,:]);
+        des=std(trainingIn[i,:]);
+        trainingIn[i,:] = normalizar.(trainingIn[i,:],media,des);
+        testIn[i,:]=normalizar.(testIn[i,:],media,des);
+    end
+
+    model = SVC(kernel="rbf", degree=3, gamma=2, C=1);
+    fit!(model, trainingIn', trainingTar');
+
+    eTraining=confusionMatrix(predict(model,trainingIn'),trainingTar');
+    eTest=confusionMatrix(predict(model,testIn'),testTar');
+    [model,eTest,eTraining]
+end
+
+@sk_import tree: DecisionTreeClassifier
+
+function sistemaArbol(inputs,targets)
+    aux=holdOut(inputs,targets);
+    trainingIn=hcat(aux[1]...);
+    trainingTar=hcat(aux[2]...);
+    testIn=hcat(aux[3]...);
+    testTar=hcat(aux[4]...);
+    for i=1:size(trainingIn,1)
+        media=mean(trainingIn[i,:]);
+        des=std(trainingIn[i,:]);
+        trainingIn[i,:] = normalizar.(trainingIn[i,:],media,des);
+        testIn[i,:]=normalizar.(testIn[i,:],media,des);
+    end
+    Armodel = DecisionTreeClassifier(max_depth=4, random_state=1);
+    fit!(Armodel, trainingIn', trainingTar');
+    eTraining=confusionMatrix(predict(Armodel,trainingIn'),trainingTar');
+    eTest=confusionMatrix(predict(Armodel,testIn'),testTar');
+    [Armodel,eTest,eTraining]
+end
+
+
+@sk_import neighbors: KNeighborsClassifier
+
+function sistemaKNN(inputs,targets)
+    aux=holdOut(inputs,targets);
+    trainingIn=hcat(aux[1]...);
+    trainingTar=hcat(aux[2]...);
+    testIn=hcat(aux[3]...);
+    testTar=hcat(aux[4]...);
+    for i=1:size(trainingIn,1)
+        media=mean(trainingIn[i,:]);
+        des=std(trainingIn[i,:]);
+        trainingIn[i,:] = normalizar.(trainingIn[i,:],media,des);
+        testIn[i,:]=normalizar.(testIn[i,:],media,des);
+    end
+    KNNmodel = KNeighborsClassifier(3);
+    fit!(KNNmodel, trainingIn', trainingTar');
+    eTraining=confusionMatrix(predict(KNNmodel,trainingIn'),trainingTar');
+    eTest=confusionMatrix(predict(KNNmodel,testIn'),testTar');
+    [KNNmodel,eTest,eTraining]
+end
+
 caracteristicas = estraccionCaracteristicas();
     
 caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
 
 redNeuronal = RRNNAA(caracteristicas[1],caracteristicas[2],[12 6],0.22,200)
+
+SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2])#=
+Araux = sistemaArbol(caracteristicas[1],caracteristicas[2])
+KNNaux = sistemaKNN(caracteristicas[1],caracteristicas[2])=#
 
 # Graficar los errores
 g = plot();
