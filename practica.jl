@@ -12,9 +12,9 @@ using JLD2
 using Images
 
 const tamWindow = 7;
-const saltoVentana = 2;
-const dirIt = "./positivos/";
-const dirGt = "./pruebas/";
+const saltoVentana = 25;
+const dirIt = "./p1/";
+const dirGt = "./p2/";
 
 
 function imageToColorArray(image::Array{RGB{Normed{UInt8,8}},2})
@@ -390,7 +390,7 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt)
         end
     end;
     
-    println(minimum(ploteable.(errTest)))
+    println("Error Minimo: ",minimum(ploteable.(errTest)))
     [best,errTest,errTraining,errValidation,err] 
 end
 
@@ -402,9 +402,6 @@ function sistemaSVM(inputs,targets)
     trainingTar = hcat(aux[2]...);
     testIn = hcat(aux[3]...);
     testTar = hcat(aux[4]...);
-
-    p = unique(targets[:,:])
-    println(p)
 
     for i=1:size(trainingIn,1)
         media=mean(trainingIn[i,:]);
@@ -419,11 +416,13 @@ function sistemaSVM(inputs,targets)
     eTraining = confusionMatrix(predict(model,trainingIn'),trainingTar');
     eTest = confusionMatrix(predict(model,testIn'),testTar');
 
+    distances = decision_function(model, inputs);
+    #println("Distancias Hiperplano: ",distances)
     println("MatrizConfusion Test",eTest)
     println("Donde el error es: ",eTest[2])
 
-
-    [model,eTest,eTraining]
+    
+    [model,eTest,eTraining,distances]
 end
 
 @sk_import tree: DecisionTreeClassifier
@@ -473,18 +472,25 @@ caracteristicas = estraccionCaracteristicas();
     
 caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
 
-#redNeuronal = RRNNAA(caracteristicas[1],caracteristicas[2],[12 6],0.22,200)
+redNeuronal = RRNNAA(caracteristicas[1],caracteristicas[2],[6 3],0.22,200)
 
-SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2])
+#SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2])
 #=Araux = sistemaArbol(caracteristicas[1],caracteristicas[2])
 KNNaux = sistemaKNN(caracteristicas[1],caracteristicas[2])=#
 
 # Graficar los errores
-g = plot();
 #=
+g = plot();
 plot!(ploteable.(redNeuronal[2]), label="Test Error");
 plot!(ploteable.(redNeuronal[3]), label="Training Error")
 plot!(ploteable.(redNeuronal[4]), label="Validation Error")
-display(g);
-=#
+display(g);=#
 
+
+
+# Plotear las distancias
+g = scatter();
+scatter!(SVMaux[4], label="Distancias")
+xlabel!("Índice de la muestra")
+ylabel!("Distancia al hiperplano")
+display(g)
