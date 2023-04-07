@@ -472,9 +472,9 @@ caracteristicas = estraccionCaracteristicas();
     
 caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
 
-redNeuronal = RRNNAA(caracteristicas[1],caracteristicas[2],[6 3],0.22,200)
+#redNeuronal = RRNNAA(caracteristicas[1],caracteristicas[2],[6 3],0.22,200)
 
-#SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2])
+SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2])
 #=Araux = sistemaArbol(caracteristicas[1],caracteristicas[2])
 KNNaux = sistemaKNN(caracteristicas[1],caracteristicas[2])=#
 
