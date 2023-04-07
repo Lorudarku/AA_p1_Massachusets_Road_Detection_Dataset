@@ -222,6 +222,7 @@ function sistemaRRNNAA(inputs,targets,topology,parada, maxMellora)
     trainingTar=hcat(aux[2]...);
     validationIn=hcat(aux[3]...);
     validationTar=hcat(aux[4]...);
+    
     eTest=[];
     eTraining=[];
     eValidation=[];

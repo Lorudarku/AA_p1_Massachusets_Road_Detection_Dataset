@@ -2,8 +2,17 @@ import numpy as np
 import math
 import cv2
 import os
+from IPython.display import Image 
+import graphviz
 
+def verArbol():
 
+    # Cargar el archivo .dot
+    with open('tree.dot') as f:
+        dot_graph = f.read()
+
+    # Mostrar el árbol de decisión
+    graphviz.Source(dot_graph)
 
 def main():
 
@@ -33,4 +42,5 @@ def main():
                 cv2.imwrite('./gt_c/' + name + str(i) + '_' + str(j) + '.tiff', roi)
                 #######################################################
 
-main()
+#main()
+verArbol()
