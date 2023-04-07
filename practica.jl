@@ -12,7 +12,7 @@ using JLD2
 using Images
 
 const tamWindow = 7;
-const saltoVentana = 25;
+const saltoVentana = 15;
 const dirIt = "./p1/";
 const dirGt = "./p2/";
 
@@ -135,30 +135,10 @@ function estraccionCaracteristicas()
         
        
     end
-    println("Carreteras: $carretera  | No carreteras: $noCarretera")
     println("Imagenes cargadas 100%");
-    #=l = size(targets,1)
-    for i in 1:l
-        if(targets[i] == "positivo")
-            push!(positivos,[inputs[i],targets[i]])
-        else 
-            push!(negativos,[inputs[i],targets[i]])
-        end
-    end
-    println("A ",size(positivos))
-    println("B ",size(negativos))
-    c = vcat(positivos, negativos)
 
-    l = size(positivos,1) + size(negativos,1)
-    for aux in 1:c
-        if(aux[2] == "positivo")
-            push!(positivos,[inputs[i],targets[i]])
-        else 
-            push!(negativos,[inputs[i],targets[i]])
-        end
-    end=#
-    
-    #shuffle!(aux,size(aux,1))
+    println("Carreteras: $carretera  | No carreteras: $noCarretera")
+
     
     println("Gt cargado 100%.");
     inputs = hcat(inputs...);
@@ -396,7 +376,7 @@ end
 
 @sk_import svm: SVC
 
-function sistemaSVM(inputs,targets)
+function sistemaSVM(inputs,targets,gammas, costes)
     aux=holdOut(inputs,targets);
     trainingIn = hcat(aux[1]...);
     trainingTar = hcat(aux[2]...);
@@ -410,7 +390,7 @@ function sistemaSVM(inputs,targets)
         testIn[i,:]=normalizar2.(testIn[i,:],media,des);
     end
 
-    model = SVC(kernel="rbf", degree=3, gamma=2, C=1);
+    model = SVC(kernel="rbf", degree=3, gamma =gammas , C=costes);
     fit!(model, trainingIn', trainingTar');
 
     eTraining = confusionMatrix(predict(model,trainingIn'),trainingTar');
@@ -433,14 +413,17 @@ function sistemaArbol(inputs,targets)
     trainingTar=hcat(aux[2]...);
     testIn=hcat(aux[3]...);
     testTar=hcat(aux[4]...);
+
     for i=1:size(trainingIn,1)
         media=mean(trainingIn[i,:]);
         des=std(trainingIn[i,:]);
         trainingIn[i,:] = normalizar.(trainingIn[i,:],media,des);
         testIn[i,:]=normalizar.(testIn[i,:],media,des);
     end
+
     Armodel = DecisionTreeClassifier(max_depth=4, random_state=1);
     fit!(Armodel, trainingIn', trainingTar');
+    
     eTraining=confusionMatrix(predict(Armodel,trainingIn'),trainingTar');
     eTest=confusionMatrix(predict(Armodel,testIn'),testTar');
     [Armodel,eTest,eTraining]
@@ -474,9 +457,9 @@ caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
 
 #redNeuronal = RRNNAA(caracteristicas[1],caracteristicas[2],[6 3],0.22,200)
 
-SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2])
-#=Araux = sistemaArbol(caracteristicas[1],caracteristicas[2])
-KNNaux = sistemaKNN(caracteristicas[1],caracteristicas[2])=#
+SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2],10, 1)
+#Araux = sistemaArbol(caracteristicas[1],caracteristicas[2])
+#KNNaux = sistemaKNN(caracteristicas[1],caracteristicas[2])
 
 # Graficar los errores
 #=
