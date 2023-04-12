@@ -67,8 +67,6 @@ end
 function estraccionCaracteristicas()
     inputs = [];
     targets = [];
-    positivos = [];
-    negativos = [];
     itc = readdir(dirIt);
     gtc = readdir(dirGt);
     tam = length(itc);
@@ -100,7 +98,7 @@ function estraccionCaracteristicas()
         posy = 1;
         posx = 1;
         l = round(Int,sqrt(length(image)));
-        name = "carreteras.jpg"
+        name = "Carretera.jpg"
 
         for x in 1:l
             posy = 1;
@@ -116,7 +114,6 @@ function estraccionCaracteristicas()
                 windowC= matrixgt[posx:tamWindow + saltoX, posy:tamWindow + saltoY];
                 
                 # Combine the RGB channels into a single color image
-                #imgsave = colorview(RGB, windowR, windowG, windowB)
 
                 #inputs[1:6]
 
@@ -136,8 +133,10 @@ function estraccionCaracteristicas()
                         #save("./datasets/no_carretera/$name", imgsave)
                         push!(inputs,transformar(windowR,windowG,windowB));
                         push!(targets,"negativo");
+                        
                     end
                 end
+
 
                 posy = posy + saltoVentana;
                 saltoY = saltoY + saltoVentana;
@@ -158,7 +157,8 @@ function estraccionCaracteristicas()
         windowB = auxMatrix[:, :, 3];   
 
         imgsave = colorview(RGB, windowR, windowG, windowB)
-        save("./datasets/carretera/$name", imgsave)=#
+        save("./datasets/carretera/$name1", imgsave)=#
+
         
     end
     
@@ -290,10 +290,13 @@ function show_tree(dot_data)
     #display("image/svg+xml", read(dot_file * ".svg", String))
 end
 
+function ploteable3(t)
+    t[1]
+end
 function ploteable1(t)
     t[1]
 end
-function ploteable(t)
+function ploteable2(t)
     t[2]
 end
 
@@ -446,6 +449,14 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
     validationTar = hcat(aux[4]...);
     
     ########
+    errMinTraining = 100
+    errMinTest = 100
+    errMinVal = 100
+
+    senTraining = 100
+    senTest = 100
+    senVal = 100
+
     errTest = [];
     errTraining = [];
     errValidation = [];
@@ -459,6 +470,8 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
         numInputsLayer = numOutputsLayer;
     end;
     ann = Chain(ann..., Dense(numInputsLayer, 1, σ));
+
+    println(size(inputs))
 
     loss(x, y) = binarycrossentropy(ann(x), y);
 
@@ -493,13 +506,25 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
             best = deepcopy(ann);
             println(it);
 
+            errMinTraining = last(ploteable2.(errTraining))
+            errMinTest = last(ploteable2.(errTest))
+            errMinVal = last(ploteable2.(errValidation))
+
+            senTraining = last(ploteable3.(errTraining))
+            senTest = last(ploteable3.(errTraining))
+            senVal = last(ploteable3.(errTraining))
         else
             it = it + 1;
             println(it);
         end
     end;
+
     
-    println("Error Minimo: ",minimum(ploteable.(errTest)))
+    
+    println("Entrenamiento- Error Minimo: ", errMinTraining, " | Sensibilidad: ", senTraining)
+    println("Test- Error Minimo: ",errMinTest, " | Sensibilidad: ", senTest)
+    println("Validacion- Error Minimo: ",errMinVal, " | Sensibilidad: ", senVal)
+
     [best,errTest,errTraining,errValidation,err] 
 end
 
@@ -527,11 +552,10 @@ function sistemaSVM(inputs,targets,gammas, costes)
 
     distances = decision_function(model, inputs);
    
-    println("MatrizConfusion Test",eTest)
     println("Donde el error es: ",eTest[2])
 
-    
     [model,eTest,eTraining,distances]
+   
 end
 
 @sk_import tree: DecisionTreeClassifier
@@ -607,44 +631,46 @@ function sistemaKNN(inputs,targets,vecinos)
     [KNNmodel,eTest,error_validacion]
 end
 
-#=caracteristicas = estraccionCaracteristicas();
+#==#
+caracteristicas = estraccionCaracteristicas();
     
-caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);=#
+caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
 
 # Graficar los errores
-#=Descomentar para RRNNAA
-redNeuronal = RRNNAA(caracteristicas[1], caracteristicas[2], [12 12 6], 0.20, 100, 0.0025)
+#=Descomentar para RRNNAA ##############################################################################################
+redNeuronal = RRNNAA(caracteristicas[1], caracteristicas[2], [12 12], 0.20, 150, 0.0015)
 g = plot();
-plot!(ploteable.(redNeuronal[2]), label="Test Error");
-plot!(ploteable.(redNeuronal[3]), label="Training Error")
-plot!(ploteable.(redNeuronal[4]), label="Validation Error")
-display(g);
+plot!(ploteable2.(redNeuronal[2]), label="Test Error");
+plot!(ploteable2.(redNeuronal[3]), label="Training Error")
+plot!(ploteable2.(redNeuronal[4]), label="Validation Error")
+display(g);=#
+#=
 rrnn = redNeuronal[1]
-JLD2.save("./redes/RRNNAA.jld2", "RRNNAA", rrnn)=#
+JLD2.save("./redes/RRNNAA.jld2", "RRNNAA", rrnn)
 data = JLD2.load("./redes/RRNNAA.jld2")
 rrnn = data["RRNNAA"]
-predecirImagen1(rrnn)
+predecirImagen1(rrnn)=#
 
 
-#=Descomentar para sistemaSVM
+#=Descomentar para sistemaSVM ##############################################################################################
 
-# Plotear las distancias
-SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2],10, 1)
+# Plotear las distancias=#
+SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2], 1, 5)
 
 g = scatter();
 scatter!(SVMaux[4], label="Distancias")
 xlabel!("Índice de la muestra")
 ylabel!("Distancia al hiperplano")
-display(g)=#
+display(g)
 
 
-#=Descomentar para sistemaArbol
+#=Descomentar para sistemaArbol ##############################################################################################
 
 Araux = sistemaArbol(caracteristicas[1],caracteristicas[2],8)
 #show_tree(Araux[4])=#
 
 
-#=Descomentar para sistemaKNN
+#=Descomentar para sistemaKNN ##############################################################################################
 vecinos = 2
 KNNaux = sistemaKNN(caracteristicas[1],caracteristicas[2],vecinos)
 

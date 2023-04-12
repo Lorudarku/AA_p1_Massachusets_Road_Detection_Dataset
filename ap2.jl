@@ -13,9 +13,9 @@ using Images
 using DecisionTree
 using GraphViz
 using PyCall
-using JLD2
+using Distributions
 
-const tamWindow = 7;
+const tamWindow = 25;
 const saltoVentana = 3;
 const dirIt = "./datasets/inputs/";
 const dirGt = "./datasets/targets/";
@@ -30,13 +30,60 @@ function imageToColorArray(image::Array{RGB{Normed{UInt8,8}},2})
 end;
 imageToColorArray(image::Array{RGBA{Normed{UInt8,8}},2}) = imageToColorArray(RGB.(image));
 
+function mediaVarianza(centro, ventana)
+    media = mean(centro);
+    varianza = var(ventana);
+
+    [media; varianza]
+end
+
 function mediaDesviacion(ventana)
     media = mean(ventana);
     desviacion = std(ventana);
 
-    [media;desviacion]
+    [media; desviacion]
 end
 
+#Calculamos las ventanas con una desviacion gaussiana
+function transformar2(matrizRojo,matrizVerde,matrizAzul)
+    m,n = size(matrizRojo)
+    pixelCentro = round(Int,ceil(tamWindow / 2));
+
+    #Calculamos la media y varianza para cada componente de color
+    mDR = mediaVarianza(matrizRojo[pixelCentro,pixelCentro],matrizRojo);
+    mDG = mediaVarianza(matrizVerde[pixelCentro,pixelCentro],matrizVerde);
+    mDB = mediaVarianza(matrizAzul[pixelCentro,pixelCentro],matrizAzul);
+
+    #Calculamos la desviacion gaussiana
+    dist_red = Normal(mDR[1], sqrt(mDR[2]))
+    dist_green = Normal(mDG[1], sqrt(mDG[2]))
+    dist_blue = Normal(mDB[1], sqrt(mDB[2]))
+
+    # Multiplicar distribución gaussiana por cada valor de la matriz
+    gaussRed = 1
+    gaussGreen = 1
+    gaussBlue = 1
+
+    for i = 1:m
+        for j = 1:n
+            pixel_red = matrizRojo[i, j]
+            pixel_green = matrizVerde[i, j]
+            pixel_blue = matrizAzul[i, j]
+
+            pdf_red = pdf(dist_red, pixel_red)
+            pdf_green = pdf(dist_green, pixel_green)
+            pdf_blue = pdf(dist_blue, pixel_blue)
+
+            gaussRed *= pdf_red
+            gaussGreen *= pdf_green
+            gaussBlue *= pdf_blue
+     
+        end
+    end
+
+    #println("Rojo: ",gaussRed," Verde: ",gaussGreen," Azul: ",gaussBlue)
+    [gaussRed, gaussGreen, gaussBlue]
+end
 
 #Calculamos las ventanas para cada imagen
 function transformar(matrizRojo,matrizVerde,matrizAzul)
@@ -290,10 +337,13 @@ function show_tree(dot_data)
     #display("image/svg+xml", read(dot_file * ".svg", String))
 end
 
+function ploteable3(t)
+    t[1]
+end
 function ploteable1(t)
     t[1]
 end
-function ploteable(t)
+function ploteable2(t)
     t[2]
 end
 
@@ -446,6 +496,14 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
     validationTar = hcat(aux[4]...);
     
     ########
+    errMinTraining = 100
+    errMinTest = 100
+    errMinVal = 100
+
+    senTraining = 100
+    senTest = 100
+    senVal = 100
+
     errTest = [];
     errTraining = [];
     errValidation = [];
@@ -459,6 +517,8 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
         numInputsLayer = numOutputsLayer;
     end;
     ann = Chain(ann..., Dense(numInputsLayer, 1, σ));
+
+    println(size(inputs))
 
     loss(x, y) = binarycrossentropy(ann(x), y);
 
@@ -493,15 +553,28 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
             best = deepcopy(ann);
             println(it);
 
+            errMinTraining = last(ploteable2.(errTraining))
+            errMinTest = last(ploteable2.(errTest))
+            errMinVal = last(ploteable2.(errValidation))
+
+            senTraining = last(ploteable3.(errTraining))
+            senTest = last(ploteable3.(errTraining))
+            senVal = last(ploteable3.(errTraining))
         else
             it = it + 1;
             println(it);
         end
     end;
+
     
-    println("Error Minimo: ",minimum(ploteable.(errTest)))
+    
+    println("Entrenamiento- Error Minimo: ", errMinTraining, " | Sensibilidad: ", senTraining)
+    println("Test- Error Minimo: ",errMinTest, " | Sensibilidad: ", senTest)
+    println("Validacion- Error Minimo: ",errMinVal, " | Sensibilidad: ", senVal)
+
     [best,errTest,errTraining,errValidation,err] 
 end
+
 
 @sk_import svm: SVC
 
@@ -607,29 +680,31 @@ function sistemaKNN(inputs,targets,vecinos)
     [KNNmodel,eTest,error_validacion]
 end
 
-#=caracteristicas = estraccionCaracteristicas();
-    
-caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);=#
+#==#
+caracteristicas = estraccionCaracteristicas();
+
+caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
 
 # Graficar los errores
-#=Descomentar para RRNNAA
-redNeuronal = RRNNAA(caracteristicas[1], caracteristicas[2], [12 12 6], 0.20, 100, 0.0025)
+#=Descomentar para RRNNAA=#
+redNeuronal = RRNNAA(caracteristicas[1], caracteristicas[2], [12 12 ], 0.20, 150, 0.0015)
 g = plot();
 plot!(ploteable.(redNeuronal[2]), label="Test Error");
 plot!(ploteable.(redNeuronal[3]), label="Training Error")
 plot!(ploteable.(redNeuronal[4]), label="Validation Error")
 display(g);
-rrnn = redNeuronal[1]
-JLD2.save("./redes/RRNNAA.jld2", "RRNNAA", rrnn)=#
+#rrnn = redNeuronal[1]
+#JLD2.save("./redes/RRNNAA.jld2", "RRNNAA", rrnn)
+#=
 data = JLD2.load("./redes/RRNNAA.jld2")
 rrnn = data["RRNNAA"]
-predecirImagen1(rrnn)
+predecirImagen1(rrnn)=#
 
 
 #=Descomentar para sistemaSVM
 
 # Plotear las distancias
-SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2],10, 1)
+SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2], 40, 80)
 
 g = scatter();
 scatter!(SVMaux[4], label="Distancias")
