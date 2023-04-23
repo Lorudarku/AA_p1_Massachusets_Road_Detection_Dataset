@@ -291,7 +291,7 @@ function show_tree(dot_data)
 end
 
 function ploteable3(t)
-    t[1]
+    t[3]
 end
 function ploteable1(t)
     t[1]
@@ -569,6 +569,8 @@ function sistemaArbol(inputs,targets, profundidad)
     testTar=hcat(aux[4]...);
 
     for i=1:size(trainingIn,1)
+        #max = maximum(trainingIn[i,:]);
+        #min = minimum(trainingIn[i,:]);
         media=mean(trainingIn[i,:]);
         des=std(trainingIn[i,:]);
         trainingIn[i,:] = normalizar1.(trainingIn[i,:],media,des);
@@ -586,7 +588,9 @@ function sistemaArbol(inputs,targets, profundidad)
     # Muestra el árbol de decisión en una ventana emergente
 
     println("MatrizConfusion Test",eTest[8])
-    println("Donde el error es: ",eTest[2])
+    println("Error Test: ",eTest[2])
+    println("Precision Test: ",eTest[3])
+
 
     [Armodel,eTest,eTraining,dot_data]
 end
@@ -607,25 +611,15 @@ function sistemaKNN(inputs,targets,vecinos)
         trainingIn[i,:] = normalizar1.(trainingIn[i,:],media,des);
         testIn[i,:]=normalizar1.(testIn[i,:],media,des);
     end
-#=
-    KNNmodel = KNeighborsClassifier(vecinos);
-    fit!(KNNmodel, trainingIn', trainingTar');
-    eTraining=confusionMatrix(predict(KNNmodel,trainingIn'),trainingTar');
-    eTest=confusionMatrix(predict(KNNmodel,testIn'),testTar');
-=#
+
     error_validacion = []
 
-    KNNmodel = KNeighborsClassifier(1)
+    KNNmodel = KNeighborsClassifier(vecinos)
     fit!(KNNmodel, trainingIn', trainingTar')
-    eTest = confusionMatrix(predict(KNNmodel, testIn'), testTar')
-    push!(error_validacion, eTest[2])
 
-    for k in (vecinos-1)
-        KNNmodel = KNeighborsClassifier(k)
-        fit!(KNNmodel, trainingIn', trainingTar')
-        eTest = confusionMatrix(predict(KNNmodel, testIn'), testTar')
-        push!(error_validacion, eTest[2])
-    end
+    prediction = predict(KNNmodel, testIn')
+    eTest = confusionMatrix(prediction, testTar')
+    push!(error_validacion, eTest[2])
 
     println("Donde el error minimo es es: ",minimum(error_validacion))
     [KNNmodel,eTest,error_validacion]
@@ -638,6 +632,7 @@ caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
 
 # Graficar los errores
 #=Descomentar para RRNNAA ##############################################################################################
+
 redNeuronal = RRNNAA(caracteristicas[1], caracteristicas[2], [12 12], 0.20, 150, 0.0015)
 g = plot();
 plot!(ploteable2.(redNeuronal[2]), label="Test Error");
@@ -654,31 +649,32 @@ predecirImagen1(rrnn)=#
 
 #=Descomentar para sistemaSVM ##############################################################################################
 
-# Plotear las distancias=#
-SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2], 1, 5)
+# Plotear las distancias
+SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2], 5, 10)
 
 g = scatter();
 scatter!(SVMaux[4], label="Distancias")
 xlabel!("Índice de la muestra")
 ylabel!("Distancia al hiperplano")
-display(g)
+display(g)=#
 
 
 #=Descomentar para sistemaArbol ##############################################################################################
 
-Araux = sistemaArbol(caracteristicas[1],caracteristicas[2],8)
-#show_tree(Araux[4])=#
-
+Araux = sistemaArbol(caracteristicas[1],caracteristicas[2],10)
+#show_tree(Araux[4])
+=#
 
 #=Descomentar para sistemaKNN ##############################################################################################
-vecinos = 2
+=#
+vecinos = 17
 KNNaux = sistemaKNN(caracteristicas[1],caracteristicas[2],vecinos)
 
 g = plot();
 plot!(vecinos, KNNaux[3], xlabel="Número de vecinos", ylabel="Error de validación", label="Curva de validación")
 scatter!([argmin(KNNaux[3])], [minimum(KNNaux[3])], label="Mejor valor de vecinos", markersize=5)
 display(g);
-=#
+
 
 
 
