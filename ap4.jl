@@ -17,6 +17,8 @@ using JLD2
 
 const tamWindow = 61;
 const tamWindow2 = 5;
+const tamWindow3 = 1;
+
 
 const saltoVentana = 3;
 const dirIt = "./datasets/inputs/";
@@ -41,7 +43,7 @@ end
 
 
 #Calculamos las ventanas para cada imagen
-function transformar(matrizRojo,matrizVerde,matrizAzul,matrizRojo2,matrizVerde2,matrizAzul2)
+function transformar(matrizRojo,matrizVerde,matrizAzul,matrizRojo2,matrizVerde2,matrizAzul2,matrizRojo3,matrizVerde3,matrizAzul3)
 
     #Calculamos la media y desviacion tipica para cada componente de color
     mDR = mediaDesviacion(matrizRojo);
@@ -51,8 +53,12 @@ function transformar(matrizRojo,matrizVerde,matrizAzul,matrizRojo2,matrizVerde2,
     mDR2 = mediaDesviacion(matrizRojo2);
     mDG2 = mediaDesviacion(matrizVerde2);
     mDB2 = mediaDesviacion(matrizAzul2);
+
+    mDR3 = mediaDesviacion(matrizRojo3);
+    mDG3 = mediaDesviacion(matrizVerde3);
+    mDB3 = mediaDesviacion(matrizAzul3);
     
-    [mDR[1],mDR[2],mDG[1],mDG[2],mDB[1],mDB[2],mDR2[1],mDR2[2],mDG2[1],mDG2[2],mDB2[1],mDB2[2]]
+    [mDR[1],mDR[2],mDG[1],mDG[2],mDB[1],mDB[2], mDR2[1],mDR2[2],mDG2[1],mDG2[2],mDB2[1],mDB2[2], mDR3[1],mDR3[2],mDG3[1],mDG3[2],mDB3[1],mDB3[2]]
 end
 
 #Calculamos si un punto central es carretera o no
@@ -124,12 +130,16 @@ function estraccionCaracteristicas()
                 windowR2 = windowR[winDiff : tamWindow2 + winDiff, winDiff:tamWindow2 + winDiff];
                 windowG2 = windowG[winDiff : tamWindow2 + winDiff, winDiff:tamWindow2 + winDiff];
                 windowB2 = windowB[winDiff : tamWindow2 + winDiff, winDiff:tamWindow2 + winDiff];   
+                
+                windowR3 = windowR[winDiff : tamWindow3 + winDiff, winDiff:tamWindow3 + winDiff];
+                windowG3 = windowG[winDiff : tamWindow3 + winDiff, winDiff:tamWindow3 + winDiff];
+                windowB3 = windowB[winDiff : tamWindow3 + winDiff, winDiff:tamWindow3 + winDiff];   
 
-                #inputs[1:12]
+                #inputs[1:18]
 
                 if (esCarretera(windowC) == true)
                     carretera +=1;
-                    push!(inputs,transformar(windowR,windowG,windowB,windowR2,windowG2,windowB2));
+                    push!(inputs,transformar(windowR,windowG,windowB, windowR2,windowG2,windowB2, windowR3,windowG3,windowB3));
                     push!(targets,"positivo");
                     #=
                     auxMatrix[posx:tamWindow + saltoX, posy:tamWindow + saltoY,1] .= 0;
@@ -150,7 +160,7 @@ function estraccionCaracteristicas()
                     if(carretera*1.2 > noCarretera)
                         noCarretera +=1;
                         #save("./datasets/no_carretera/$name", imgsave)
-                        push!(inputs,transformar(windowR2,windowG2,windowB2,windowR,windowG,windowB));
+                        push!(inputs,transformar(windowR,windowG,windowB, windowR2,windowG2,windowB2, windowR3,windowG3,windowB3));
                         push!(targets,"negativo");
 
                         if (esNoCar && carretera > 200)
@@ -666,7 +676,7 @@ caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
 # Graficar los errores
 #=Descomentar para RRNNAA ##############################################################################################
 =#
-redNeuronal = RRNNAA(caracteristicas[1], caracteristicas[2], [24 12], 0, 150, 0.0025)
+redNeuronal = RRNNAA(caracteristicas[1], caracteristicas[2], [36 24 12], 0, 150, 0.0025)
 g = plot();
 plot!(ploteable2.(redNeuronal[2]), label="Test Error");
 plot!(ploteable2.(redNeuronal[3]), label="Training Error")
