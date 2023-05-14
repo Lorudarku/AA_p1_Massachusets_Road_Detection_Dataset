@@ -717,14 +717,23 @@ function estadisticas(values, numIt)
         elseif tipoalgo == "svm"
 
             algoritm = sistemaSVM(values[2], values[3], values[4], values[5])
+            push!(precision, algoritm[6])
+            push!(sensibilidad, algoritm[7])
+            push!(f1, algoritm[8])
 
         elseif tipoalgo == "tree"
 
             algoritm = sistemaArbol(values[2], values[3], values[4])
+push!(precision, algoritm[6])
+            push!(sensibilidad, algoritm[7])
+            push!(f1, algoritm[8])
 
         elseif tipoalgo == "knn"
 
             algoritm = sistemaKNN(values[2], values[3], values[4])
+            push!(precision, algoritm[6])
+            push!(sensibilidad, algoritm[7])
+            push!(f1, algoritm[8])
 
         end
 
