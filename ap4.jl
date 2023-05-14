@@ -14,8 +14,13 @@ using DecisionTree
 using GraphViz
 using PyCall
 using JLD2
+using Flux
+using Random
+using Random:seed!
 
-const tamWindow = 61;
+@sk_import model_selection: KFold
+
+const tamWindow = 25;
 const tamWindow2 = 7;
 const tamWindow3 = 3;
 
@@ -87,6 +92,7 @@ function estraccionCaracteristicas()
     esNoCar = true
     pixelCentro = round(Int,ceil(tamWindow / 2));
     winDiff = round(Int,ceil((tamWindow-tamWindow2) / 2))
+    winDiff2 = round(Int,ceil((tamWindow-tamWindow3) / 2))
 
     l=0;
     i = 0.;
@@ -131,9 +137,9 @@ function estraccionCaracteristicas()
                 windowG2 = windowG[winDiff : tamWindow2 + winDiff, winDiff:tamWindow2 + winDiff];
                 windowB2 = windowB[winDiff : tamWindow2 + winDiff, winDiff:tamWindow2 + winDiff];   
                 
-                windowR3 = windowR[winDiff : tamWindow3 + winDiff, winDiff:tamWindow3 + winDiff];
-                windowG3 = windowG[winDiff : tamWindow3 + winDiff, winDiff:tamWindow3 + winDiff];
-                windowB3 = windowB[winDiff : tamWindow3 + winDiff, winDiff:tamWindow3 + winDiff];   
+                windowR3 = windowR[winDiff2 : tamWindow3 + winDiff2, winDiff2:tamWindow3 + winDiff2];
+                windowG3 = windowG[winDiff2 : tamWindow3 + winDiff2, winDiff2:tamWindow3 + winDiff2];
+                windowB3 = windowB[winDiff2 : tamWindow3 + winDiff2, winDiff2:tamWindow3 + winDiff2];   
 
                 #inputs[1:18]
 
@@ -153,6 +159,10 @@ function estraccionCaracteristicas()
 
                         name = "esCarretera2.jpg"
                         imgsave = colorview(RGB, windowR2, windowG2, windowB2)
+                        save("./datasets/carretera/$name", imgsave)
+
+                        name = "esCarretera3.jpg"
+                        imgsave = colorview(RGB, windowR3, windowG3, windowB3)
                         save("./datasets/carretera/$name", imgsave)
                         esCar = false
                     end
@@ -461,119 +471,148 @@ function confusionMatrix(in,tar,umbral)
     confusionMatrix(aux,tar)
 end
 
+function crossvalidation(N::Int64, k::Int64)
+    indices = repeat(1:k, Int64(ceil(N/k)));
+    indices = indices[1:N];
+    shuffle!(indices);
+    return indices;
+end;
+
 #  Entradas, targets , topologia, tasa de error minima y ciclos maximos
 function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
     #Cambio la tasa de error minimo a la tasa de precision minima
     precis = 100 - minerror
-    #Randomizar y normalizar
-    aux = holdOut(inputs,targets);
-    trainingIn = hcat(aux[1]...);
-    trainingTar = hcat(aux[2]...);
-    testIn = hcat(aux[3]...);
-    testTar = hcat(aux[4]...);
-
+    k = 10
     ann = Chain();
-#==#
-    for i in 1:size(trainingIn,1)
-        #max = maximum(trainingIn[i,:]);
-        #min = minimum(trainingIn[i,:]);
-        media = mean(trainingIn[i,:]);
-        des = std(trainingIn[i,:]);
-        trainingIn[i,:] = normalizar2.(trainingIn[i,:],media,des);
-        testIn[i,:] = normalizar2.(testIn[i,:],media,des);
-    end
 
-    aux = holdOut(trainingIn',trainingTar');
-    
-    trainingIn = hcat(aux[1]...);
-    trainingTar = hcat(aux[2]...);
-    validationIn = hcat(aux[3]...);
-    validationTar = hcat(aux[4]...);
-    
-    ########
-    errMinTraining = 100
-    errMinTest = 100
-    errMinVal = 100
-    f1Training = 0;
+    # Entrenar y probar en cada pliegue
+    precision = []
+    sensibilidad = []
+    f1 = []
+
+    errTest = []
+    errTraining = []
+    errValidation = []
+
+    kf = crossvalidation(size(inputs,1),k) 
+
+    for fold in 1:k
+        trainingIndices = findall(x -> x != fold, kf);
+        testIndices = findall(x -> x == fold, kf);
+
+        # Obtener los datos de entrenamiento y validación
+        trainFoldIn, trainFoldTarget = inputs[trainingIndices, :], targets[trainingIndices,:]
+        testFoldIn, testFoldTarget = inputs[testIndices, :], targets[testIndices,:]
 
 
-    senTraining = 100
-    senTest = 100
-    senVal = 100
+        #=Normalizar=#
+        for i in 1:size(trainFoldIn,1)
+            media = mean(trainFoldIn[i,:]);
+            des = std(trainFoldIn[i,:]);
+            trainFoldIn[i,:] = normalizar2.(trainFoldIn[i,:],media,des);
+        end
 
-    errTest = [];
-    errTraining = [];
-    errValidation = [];    
-    min = 0;
-    it = 0;
-    
-    #Creación Arn
-    numInputsLayer = size(inputs,2);
-    for numOutputsLayer = topology
-        ann = Chain(ann..., Dense(numInputsLayer, numOutputsLayer, σ) );
-        numInputsLayer = numOutputsLayer;
-    end;
-    ann = Chain(ann..., Dense(numInputsLayer, 1, σ));
+        for i in 1:size(testFoldIn,1)
+            media = mean(testFoldIn[i,:]);
+            des = std(testFoldIn[i,:]);
+            testFoldIn[i,:] = normalizar2.(testFoldIn[i,:],media,des);
+        end
 
-    println(size(inputs))
+        aux = holdOut(trainFoldIn',trainFoldTarget');
+        trainFoldIn = hcat(aux[1]...);
+        trainFoldTarget = hcat(aux[2]...);
+        validationIn = hcat(aux[3]...);
+        validationTar = hcat(aux[4]...);
+ 
+        ########
+        errMinTraining = 100
+        errMinTest = 100
+        errMinVal = 100
+        f1Training = 0;
 
-    loss(x, y) = binarycrossentropy(ann(x), y);
 
-    #Entrenamiento y calculo del error
-    Flux.train!(loss, Flux.params(ann), [(trainingIn, trainingTar)], ADAM(aprendizaje));
-    err = confusionMatrix(round.(ann(trainingIn))',trainingTar')
-    push!(errTraining,err);
+        senTraining = 100
+        senTest = 100
+        senVal = 100
 
-    err = confusionMatrix(round.(ann(testIn))',testTar')
-    push!(errTest,err);
+        errTest = [];
+        errTraining = [];
+        errValidation = [];    
+        min = 0;
+        it = 0;
+        
+        #Creación Arn
+        numInputsLayer = size(inputs,2);
+        for numOutputsLayer = topology
+            ann = Chain(ann..., Dense(numInputsLayer, numOutputsLayer, σ) );
+            numInputsLayer = numOutputsLayer;
+        end;
+        ann = Chain(ann..., Dense(numInputsLayer, 1, σ));
 
-    err = confusionMatrix(round.(ann(validationIn))',validationTar')
-    push!(errValidation,err);
-    best = deepcopy(ann);
-    println("Precision: ",err[1] )
+        println(size(inputs))
 
-    while ((err[1] < precis) && (it < maxIt))
-        Flux.train!(loss, Flux.params(ann), [(trainingIn, trainingTar)], ADAM(aprendizaje));
-        err = confusionMatrix(round.(ann(trainingIn))',trainingTar')
+        loss(x, y) = binarycrossentropy(ann(x), y);
+
+        #Entrenamiento y calculo del error
+        Flux.train!(loss, Flux.params(ann), [(trainFoldIn, trainFoldTarget)], ADAM(aprendizaje));
+        err = confusionMatrix(round.(ann(trainFoldIn))',trainFoldTarget')
         push!(errTraining,err);
+
+        err = confusionMatrix(round.(ann(testFoldIn))',testFoldTarget')
+        push!(errTest,err);
 
         err = confusionMatrix(round.(ann(validationIn))',validationTar')
         push!(errValidation,err);
-
-        err = confusionMatrix(round.(ann(testIn))',testTar')
-        push!(errTest,err);
+        best = deepcopy(ann);
         println("Precision: ",err[1] )
 
-        if err[1] > min
-            min = err[1];
-            it = 0;
-            best = deepcopy(ann);
-            println(it);
+        while ((err[1] < precis) && (it < maxIt))
+            Flux.train!(loss, Flux.params(ann), [(trainFoldIn, trainFoldTarget)], ADAM(aprendizaje));
+            err = confusionMatrix(round.(ann(trainFoldIn))',trainFoldTarget')
+            push!(errTraining,err);
 
-            errMinTraining = last(ploteable2.(errTraining))
-            errMinTest = last(ploteable2.(errTest))
-            errMinVal = last(ploteable2.(errValidation))
+            err = confusionMatrix(round.(ann(validationIn))',validationTar')
+            push!(errValidation,err);
 
-            senTraining = last(ploteable3.(errTraining))
-            senTest = last(ploteable3.(errTraining))
-            senVal = last(ploteable3.(errTraining))
+            err = confusionMatrix(round.(ann(testFoldIn))',testFoldTarget')
+            push!(errTest,err);
+            println("Precision: ",err[1] )
 
-            f1Training = last(ploteable7.(errTraining))
-        else
-            it = it + 1;
-            println(it);
+            if err[1] > min
+                min = err[1];
+                it = 0;
+                best = deepcopy(ann);
+                println(it);
+
+                errMinTraining = last(ploteable2.(errTraining))
+                errMinTest = last(ploteable2.(errTest))
+                errMinVal = last(ploteable2.(errValidation))
+
+                senTraining = last(ploteable3.(errTraining))
+                senTest = last(ploteable3.(errTraining))
+                senVal = last(ploteable3.(errTraining))
+
+                precTraining = last(ploteable1.(errTraining))
+                f1Training = last(ploteable7.(errTraining))
+            else
+                it = it + 1;
+                println(it);
+            end
         end
-    end;
 
+        push!(precision, precTraining)
+        push!(sensibilidad, senTraining)
+        push!(f1, f1Training)
+    end
+
+    precMedia = mean(precision)
+    sensMedia = mean(sensibilidad)
+    f1Media = mean(f1)
     
-    
-    println("Entrenamiento- Error Minimo: ", errMinTraining, " | Sensibilidad: ", senTraining)
-    println("Test- Error Minimo: ",errMinTest, " | Sensibilidad: ", senTest)
-    println("Validacion- Error Minimo: ",errMinVal, " | Sensibilidad: ", senVal)
+    println("Entrenamiento(Media-Kfold) -> Precision: ", precMedia, " | Sensibilidad: ", sensMedia, " | F1-Score: ", f1Media)
     println()
 
-    errMinTraining = 1 - errMinTraining
-    [best, errTest, errTraining, errValidation, err, errMinTraining, senTraining, f1Training] 
+    [best, errTest, errTraining, errValidation, err, precMedia, sensMedia, f1Media] 
 end
 
 @sk_import svm: SVC
@@ -685,7 +724,6 @@ function estadisticas(values, numIt)
     precAux = 0
     sensibilidad = []
     f1 = []
-    dtipica = []
 
     tipoalgo = values[1]
     algoritm = []
