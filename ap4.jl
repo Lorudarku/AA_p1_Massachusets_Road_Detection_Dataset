@@ -572,7 +572,7 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
     println("Validacion- Error Minimo: ",errMinVal, " | Sensibilidad: ", senVal)
     println()
 
-
+    errMinTraining = 1 - errMinTraining
     [best, errTest, errTraining, errValidation, err, errMinTraining, senTraining, f1Training] 
 end
 
@@ -724,7 +724,7 @@ function estadisticas(values, numIt)
         elseif tipoalgo == "tree"
 
             algoritm = sistemaArbol(values[2], values[3], values[4])
-push!(precision, algoritm[6])
+            push!(precision, algoritm[6])
             push!(sensibilidad, algoritm[7])
             push!(f1, algoritm[8])
 
