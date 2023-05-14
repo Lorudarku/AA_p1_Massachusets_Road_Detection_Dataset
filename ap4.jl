@@ -25,7 +25,7 @@ const tamWindow2 = 7;
 const tamWindow3 = 3;
 
 
-const saltoVentana = 15;
+const saltoVentana = 20;
 const dirIt = "./datasets/inputs/";
 const dirGt = "./datasets/targets/";
 
@@ -482,10 +482,20 @@ end;
 function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
     #Cambio la tasa de error minimo a la tasa de precision minima
     precis = 100 - minerror
-    k = 10
-    ann = Chain();
+    errMinTraining = 100
+    errMinTest = 100
+    errMinVal = 100
+    f1Training = 0
+    precTraining = 0
 
-    # Entrenar y probar en cada pliegue
+    senTraining = 100
+    senTest = 100
+    senVal = 100
+
+    errTest = [];
+    errTraining = [];
+    errValidation = [];  
+
     precision = []
     sensibilidad = []
     f1 = []
@@ -494,6 +504,22 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
     errTraining = []
     errValidation = []
 
+    k = 10
+    ann = Chain();
+
+    #Creación Arn
+    numInputsLayer = size(inputs,2);
+    for numOutputsLayer = topology
+        ann = Chain(ann..., Dense(numInputsLayer, numOutputsLayer, σ) );
+        numInputsLayer = numOutputsLayer;
+    end;
+    ann = Chain(ann..., Dense(numInputsLayer, 1, σ));
+
+    loss(x, y) = binarycrossentropy(ann(x), y);
+    best = deepcopy(ann);
+
+    # Entrenar y probar en cada pliegue
+    
     kf = crossvalidation(size(inputs,1),k) 
 
     for fold in 1:k
@@ -503,7 +529,7 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
         # Obtener los datos de entrenamiento y validación
         trainFoldIn, trainFoldTarget = inputs[trainingIndices, :], targets[trainingIndices,:]
         testFoldIn, testFoldTarget = inputs[testIndices, :], targets[testIndices,:]
-
+        
 
         #=Normalizar=#
         for i in 1:size(trainFoldIn,1)
@@ -518,40 +544,28 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
             testFoldIn[i,:] = normalizar2.(testFoldIn[i,:],media,des);
         end
 
-        aux = holdOut(trainFoldIn',trainFoldTarget');
+        aux = holdOut(trainFoldIn,trainFoldTarget);
         trainFoldIn = hcat(aux[1]...);
         trainFoldTarget = hcat(aux[2]...);
         validationIn = hcat(aux[3]...);
         validationTar = hcat(aux[4]...);
+
+        testFoldIn = testFoldIn'
+        testFoldTarget = testFoldTarget'
+
+        println("#######")
+        println(size(trainFoldIn))
+        println(size(validationIn))
+        println(size(testFoldIn))
+        println("#######")
+
  
         ########
-        errMinTraining = 100
-        errMinTest = 100
-        errMinVal = 100
-        f1Training = 0;
-
-
-        senTraining = 100
-        senTest = 100
-        senVal = 100
-
-        errTest = [];
-        errTraining = [];
-        errValidation = [];    
+         
         min = 0;
         it = 0;
         
-        #Creación Arn
-        numInputsLayer = size(inputs,2);
-        for numOutputsLayer = topology
-            ann = Chain(ann..., Dense(numInputsLayer, numOutputsLayer, σ) );
-            numInputsLayer = numOutputsLayer;
-        end;
-        ann = Chain(ann..., Dense(numInputsLayer, 1, σ));
-
-        println(size(inputs))
-
-        loss(x, y) = binarycrossentropy(ann(x), y);
+        
 
         #Entrenamiento y calculo del error
         Flux.train!(loss, Flux.params(ann), [(trainFoldIn, trainFoldTarget)], ADAM(aprendizaje));
@@ -563,7 +577,6 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
 
         err = confusionMatrix(round.(ann(validationIn))',validationTar')
         push!(errValidation,err);
-        best = deepcopy(ann);
         println("Precision: ",err[1] )
 
         while ((err[1] < precis) && (it < maxIt))
@@ -612,7 +625,7 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
     println("Entrenamiento(Media-Kfold) -> Precision: ", precMedia, " | Sensibilidad: ", sensMedia, " | F1-Score: ", f1Media)
     println()
 
-    [best, errTest, errTraining, errValidation, err, precMedia, sensMedia, f1Media] 
+    [best, errTest, errTraining, errValidation, precMedia, sensMedia, f1Media] 
 end
 
 @sk_import svm: SVC
@@ -738,9 +751,9 @@ function estadisticas(values, numIt)
         
             algoritm = RRNNAA(values[2], values[3], values[4], values[5], values[6], values[7])
             
-            push!(precision, algoritm[6])
-            push!(sensibilidad, algoritm[7])
-            push!(f1, algoritm[8])
+            push!(precision, algoritm[5])
+            push!(sensibilidad, algoritm[6])
+            push!(f1, algoritm[7])
 
             if (last(precision) > precAux)
 
@@ -755,23 +768,23 @@ function estadisticas(values, numIt)
         elseif tipoalgo == "svm"
 
             algoritm = sistemaSVM(values[2], values[3], values[4], values[5])
-            push!(precision, algoritm[6])
-            push!(sensibilidad, algoritm[7])
-            push!(f1, algoritm[8])
+            push!(precision, ploteable1.(algoritm[2]))
+            push!(sensibilidad, ploteable3.(algoritm[2]))
+            push!(f1, ploteable7.(algoritm[2]))
 
         elseif tipoalgo == "tree"
 
             algoritm = sistemaArbol(values[2], values[3], values[4])
-            push!(precision, algoritm[6])
-            push!(sensibilidad, algoritm[7])
-            push!(f1, algoritm[8])
+            push!(precision, ploteable1.(algoritm[2]))
+            push!(sensibilidad, ploteable3.(algoritm[2]))
+            push!(f1, ploteable7.(algoritm[2]))
 
         elseif tipoalgo == "knn"
 
             algoritm = sistemaKNN(values[2], values[3], values[4])
-            push!(precision, algoritm[6])
-            push!(sensibilidad, algoritm[7])
-            push!(f1, algoritm[8])
+            push!(precision, ploteable1.(algoritm[2]))
+            push!(sensibilidad, ploteable3.(algoritm[2]))
+            push!(f1, ploteable7.(algoritm[2]))
 
         end
 
@@ -812,7 +825,7 @@ caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
 =#
 #redNeuronal = RRNNAA(caracteristicas[1], caracteristicas[2], [36 24], 0, 150, 0.0025)
 
-rrnnaa = ["rrnnaa", caracteristicas[1], caracteristicas[2], [36 24], 0, 150, 0.0025]
+rrnnaa = ["rrnnaa", caracteristicas[1], caracteristicas[2], [24 24 12], 0, 150, 0.0025]
 stats = estadisticas(rrnnaa, 1)
 
 #=
