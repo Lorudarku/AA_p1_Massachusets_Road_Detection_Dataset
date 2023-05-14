@@ -16,11 +16,11 @@ using PyCall
 using JLD2
 
 const tamWindow = 61;
-const tamWindow2 = 5;
-const tamWindow3 = 1;
+const tamWindow2 = 7;
+const tamWindow3 = 3;
 
 
-const saltoVentana = 3;
+const saltoVentana = 15;
 const dirIt = "./datasets/inputs/";
 const dirGt = "./datasets/targets/";
 
@@ -325,14 +325,20 @@ function show_tree(dot_data)
     #display("image/svg+xml", read(dot_file * ".svg", String))
 end
 
+function ploteable7(t)
+    t[7]
+end
+
 function ploteable3(t)
     t[3]
 end
-function ploteable1(t)
-    t[1]
-end
+
 function ploteable2(t)
     t[2]
+end
+
+function ploteable1(t)
+    t[1]
 end
 
 function normalizar(a,u)
@@ -454,6 +460,7 @@ function confusionMatrix(in,tar,umbral)
     aux = normalizar.(in,umbral);
     confusionMatrix(aux,tar)
 end
+
 #  Entradas, targets , topologia, tasa de error minima y ciclos maximos
 function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
     #Cambio la tasa de error minimo a la tasa de precision minima
@@ -487,6 +494,8 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
     errMinTraining = 100
     errMinTest = 100
     errMinVal = 100
+    f1Training = 0;
+
 
     senTraining = 100
     senTest = 100
@@ -494,7 +503,7 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
 
     errTest = [];
     errTraining = [];
-    errValidation = [];
+    errValidation = [];    
     min = 0;
     it = 0;
     
@@ -548,6 +557,8 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
             senTraining = last(ploteable3.(errTraining))
             senTest = last(ploteable3.(errTraining))
             senVal = last(ploteable3.(errTraining))
+
+            f1Training = last(ploteable7.(errTraining))
         else
             it = it + 1;
             println(it);
@@ -562,7 +573,7 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
     println()
 
 
-    [best,errTest,errTraining,errValidation,err] 
+    [best, errTest, errTraining, errValidation, err, errMinTraining, senTraining, f1Training] 
 end
 
 @sk_import svm: SVC
@@ -668,6 +679,82 @@ function sistemaKNN(inputs,targets,vecinos)
     [KNNmodel,eTest,error_validacion]
 end
 
+
+function estadisticas(values, numIt)
+    precision = []
+    precAux = 0
+    sensibilidad = []
+    f1 = []
+    dtipica = []
+
+    tipoalgo = values[1]
+    algoritm = []
+
+    errorTest = []
+    errorTraining = []
+    errorValid = []
+
+    for i in 1:numIt 
+
+        if tipoalgo == "rrnnaa"
+        
+            algoritm = RRNNAA(values[2], values[3], values[4], values[5], values[6], values[7])
+            
+            push!(precision, algoritm[6])
+            push!(sensibilidad, algoritm[7])
+            push!(f1, algoritm[8])
+
+            if (last(precision) > precAux)
+
+                errorTest = algoritm[2]
+                errorTraining = algoritm[3]
+                errorValid = algoritm[4]
+
+                precAux = last(precision)
+            end
+
+
+        elseif tipoalgo == "svm"
+
+            algoritm = sistemaSVM(values[2], values[3], values[4], values[5])
+
+        elseif tipoalgo == "tree"
+
+            algoritm = sistemaArbol(values[2], values[3], values[4])
+
+        elseif tipoalgo == "knn"
+
+            algoritm = sistemaKNN(values[2], values[3], values[4])
+
+        end
+
+    end
+
+    precMedia = mean(precision)
+    sensMedia = mean(sensibilidad)
+    f1Media = mean(f1)
+    f1DTipica = std(f1)
+
+    println("Media para: ",numIt," iteraciones")
+    println("Precision : ", precMedia)
+    println("Sensibilidad: ",sensMedia)
+    println("F1-Score: ",f1Media)
+    println("F1-Score DTipica: ",f1DTipica)
+    println()
+
+
+    if tipoalgo == "rrnnaa"
+        g = plot();
+        plot!(ploteable2.(errorTest), label="Test Error");
+        plot!(ploteable2.(errorTraining), label="Training Error")
+        plot!(ploteable2.(errorValid), label="Validation Error")
+        display(g);
+    end
+
+
+end
+
+
 #==#
 caracteristicas = estraccionCaracteristicas();
     
@@ -676,12 +763,18 @@ caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
 # Graficar los errores
 #=Descomentar para RRNNAA ##############################################################################################
 =#
-redNeuronal = RRNNAA(caracteristicas[1], caracteristicas[2], [36 24 12], 0, 150, 0.0025)
+#redNeuronal = RRNNAA(caracteristicas[1], caracteristicas[2], [36 24], 0, 150, 0.0025)
+
+rrnnaa = ["rrnnaa", caracteristicas[1], caracteristicas[2], [36 24], 0, 150, 0.0025]
+stats = estadisticas(rrnnaa, 1)
+
+#=
 g = plot();
 plot!(ploteable2.(redNeuronal[2]), label="Test Error");
 plot!(ploteable2.(redNeuronal[3]), label="Training Error")
 plot!(ploteable2.(redNeuronal[4]), label="Validation Error")
 display(g);
+=#
 #=
 ##Guardar o cargar la mejor rrnn
 rrnn = redNeuronal[1]
@@ -694,8 +787,13 @@ predecirImagen1(rrnn)
 #=Descomentar para sistemaSVM ##############################################################################################
 
 # Plotear las distancias
-SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2], 15, 40)
+#SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2], 15, 40)
 
+svm = ["svm", caracteristicas[1],caracteristicas[2], 15, 40]
+stats = estadisticas(redNeuronal, svm, 50)
+
+=#
+#=
 g = scatter();
 scatter!(SVMaux[4], label="Distancias")
 xlabel!("Índice de la muestra")
@@ -705,25 +803,22 @@ display(g)=#
 
 #=Descomentar para sistemaArbol ##############################################################################################
 
-Araux = sistemaArbol(caracteristicas[1],caracteristicas[2],10)
+#Araux = sistemaArbol(caracteristicas[1],caracteristicas[2],10)
 
-Araux = sistemaArbol(caracteristicas[1],caracteristicas[2],12)
+tree = ["tree", caracteristicas[1], caracteristicas[2], 10]
+stats = estadisticas(redNeuronal, tree, 50)
 
-Araux = sistemaArbol(caracteristicas[1],caracteristicas[2],15)
 =#
 #show_tree(Araux[4])
 
 
 #=Descomentar para sistemaKNN ##############################################################################################
 
-vecinos = 1
-KNNaux = sistemaKNN(caracteristicas[1],caracteristicas[2],vecinos)
+#KNNaux = sistemaKNN(caracteristicas[1],caracteristicas[2],vecinos)
 
-vecinos = 2
-KNNaux = sistemaKNN(caracteristicas[1],caracteristicas[2],vecinos)
+knn = ["knn", caracteristicas[1], caracteristicas[2], 5]
+stats = estadisticas(redNeuronal, knn, 50)
 
-vecinos = 4
-KNNaux = sistemaKNN(caracteristicas[1],caracteristicas[2],vecinos)
 =#
 #=
 g = plot();
