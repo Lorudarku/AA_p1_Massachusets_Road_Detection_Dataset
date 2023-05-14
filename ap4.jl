@@ -20,12 +20,12 @@ using Random:seed!
 
 @sk_import model_selection: KFold
 
-const tamWindow = 25;
+const tamWindow = 60;
 const tamWindow2 = 7;
 const tamWindow3 = 3;
 
 
-const saltoVentana = 20;
+const saltoVentana = 3;
 const dirIt = "./datasets/inputs/";
 const dirGt = "./datasets/targets/";
 
@@ -504,7 +504,6 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
     errTraining = []
     errValidation = []
 
-    k = 10
     ann = Chain();
 
     #Creación Arn
@@ -519,7 +518,7 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
     best = deepcopy(ann);
 
     # Entrenar y probar en cada pliegue
-    
+    k = 10
     kf = crossvalidation(size(inputs,1),k) 
 
     for fold in 1:k
@@ -564,8 +563,6 @@ function RRNNAA(inputs,targets,topology,minerror, maxIt, aprendizaje)
          
         min = 0;
         it = 0;
-        
-        
 
         #Entrenamiento y calculo del error
         Flux.train!(loss, Flux.params(ann), [(trainFoldIn, trainFoldTarget)], ADAM(aprendizaje));
@@ -631,32 +628,59 @@ end
 @sk_import svm: SVC
 
 function sistemaSVM(inputs,targets,gammas, costes)
-    aux=holdOut(inputs,targets);
-    trainingIn = hcat(aux[1]...);
-    trainingTar = hcat(aux[2]...);
-    testIn = hcat(aux[3]...);
-    testTar = hcat(aux[4]...);
+    k = 10
+    precision = []
+    sensibilidad = []
+    f1 = []
+    eTest = []
 
-    for i=1:size(trainingIn,1)
-        media=mean(trainingIn[i,:]);
-        des=std(trainingIn[i,:]);
-        trainingIn[i,:] = normalizar2.(trainingIn[i,:],media,des);
-        testIn[i,:]=normalizar2.(testIn[i,:],media,des);
-    end
+    kf = crossvalidation(size(inputs,1),k) 
 
     model = SVC(kernel="rbf", degree=3, gamma =gammas , C=costes);
-    fit!(model, trainingIn', trainingTar');
-    
-    eTraining = confusionMatrix(predict(model,trainingIn'),trainingTar');
-    eTest = confusionMatrix(predict(model,testIn'),testTar');
 
-    distances = decision_function(model, inputs);
-   
-    println("Donde el error es: ",eTest[2])
+    for fold in 1:k
+        trainingIndices = findall(x -> x != fold, kf);
+        testIndices = findall(x -> x == fold, kf);
+
+        # Obtener los datos de entrenamiento y validación
+        trainFoldIn, trainFoldTarget = inputs[trainingIndices, :], targets[trainingIndices,:]
+        testFoldIn, testFoldTarget = inputs[testIndices, :], targets[testIndices,:]
+        
+
+        #=Normalizar=#
+
+        for i in 1:size(trainFoldIn,1)
+            media = mean(trainFoldIn[i,:]);
+            des = std(trainFoldIn[i,:]);
+            trainFoldIn[i,:] = normalizar2.(trainFoldIn[i,:],media,des);
+        end
+
+        for i in 1:size(testFoldIn,1)
+            media = mean(testFoldIn[i,:]);
+            des = std(testFoldIn[i,:]);
+            testFoldIn[i,:] = normalizar2.(testFoldIn[i,:],media,des);
+        end
+
+        fit!(model, trainFoldIn, trainFoldTarget);
+        
+        eTraining = confusionMatrix(predict(model,trainFoldIn),trainFoldTarget);
+        eTest = confusionMatrix(predict(model,testFoldIn),testFoldTarget);
+
+        push!(precision, eTest[1])
+        push!(sensibilidad, eTest[3])
+        push!(f1, eTest[7])
+
+    end
+    
+    precMedia = mean(precision)
+    sensMedia = mean(sensibilidad)
+    f1Media = mean(f1)
+    
+    println("Entrenamiento(Media-Kfold) -> Precision: ", precMedia, " | Sensibilidad: ", sensMedia, " | F1-Score: ", f1Media)
     println()
 
 
-    [model,eTest,eTraining,distances]
+    [model,eTest,precMedia,sensMedia,f1Media]
    
 end
 
@@ -664,71 +688,116 @@ end
 @pyimport sklearn.tree as sktree
 
 function sistemaArbol(inputs,targets, profundidad)
-    aux=holdOut(inputs,targets);
-    trainingIn=hcat(aux[1]...);
-    trainingTar=hcat(aux[2]...);
-    testIn=hcat(aux[3]...);
-    testTar=hcat(aux[4]...);
+    k = 10
+    precision = []
+    sensibilidad = []
+    f1 = []
+    eTest = []
 
-    for i=1:size(trainingIn,1)
-        #max = maximum(trainingIn[i,:]);
-        #min = minimum(trainingIn[i,:]);
-        media=mean(trainingIn[i,:]);
-        des=std(trainingIn[i,:]);
-        trainingIn[i,:] = normalizar1.(trainingIn[i,:],media,des);
-        testIn[i,:]=normalizar1.(testIn[i,:],media,des);
-    end
+    kf = crossvalidation(size(inputs,1),k) 
 
     Armodel = DecisionTreeClassifier(max_depth=profundidad, random_state=1);
-    fit!(Armodel, trainingIn', trainingTar');
 
-    eTraining = confusionMatrix(predict(Armodel,trainingIn'),trainingTar');
-    eTest = confusionMatrix(predict(Armodel,testIn'),testTar');
+    for fold in 1:k
+        trainingIndices = findall(x -> x != fold, kf);
+        testIndices = findall(x -> x == fold, kf);
 
-    dot_data = sktree.export_graphviz(Armodel, out_file=nothing)
+        # Obtener los datos de entrenamiento y validación
+        trainFoldIn, trainFoldTarget = inputs[trainingIndices, :], targets[trainingIndices,:]
+        testFoldIn, testFoldTarget = inputs[testIndices, :], targets[testIndices,:]
+        
 
-    # Muestra el árbol de decisión en una ventana emergente
+        #=Normalizar=#
 
-    println("MatrizConfusion Test",eTest[8])
-    println("Donde el error es: ",eTest[2])
+        for i in 1:size(trainFoldIn,1)
+            media = mean(trainFoldIn[i,:]);
+            des = std(trainFoldIn[i,:]);
+            trainFoldIn[i,:] = normalizar2.(trainFoldIn[i,:],media,des);
+        end
+
+        for i in 1:size(testFoldIn,1)
+            media = mean(testFoldIn[i,:]);
+            des = std(testFoldIn[i,:]);
+            testFoldIn[i,:] = normalizar2.(testFoldIn[i,:],media,des);
+        end
+
+        fit!(Armodel, trainFoldIn, trainFoldTarget);
+        
+        eTraining = confusionMatrix(predict(Armodel,trainFoldIn),trainFoldTarget);
+        eTest = confusionMatrix(predict(Armodel,testFoldIn),testFoldTarget);
+
+        push!(precision, eTest[1])
+        push!(sensibilidad, eTest[3])
+        push!(f1, eTest[7])
+
+    end
+    
+    precMedia = mean(precision)
+    sensMedia = mean(sensibilidad)
+    f1Media = mean(f1)
+    
+    println("Entrenamiento(Media-Kfold) -> Precision: ", precMedia, " | Sensibilidad: ", sensMedia, " | F1-Score: ", f1Media)
     println()
 
-
-    [Armodel,eTest,eTraining,dot_data]
+    [Armodel,eTest,precMedia,sensMedia,f1Media]
 end
 
 
 @sk_import neighbors: KNeighborsClassifier
 
 function sistemaKNN(inputs,targets,vecinos)
-    aux=holdOut(inputs,targets);
-    trainingIn=hcat(aux[1]...);
-    trainingTar=hcat(aux[2]...);
-    testIn=hcat(aux[3]...);
-    testTar=hcat(aux[4]...);
+    k = 10
+    precision = []
+    sensibilidad = []
+    f1 = []
+    eTest = []
 
-    for i=1:size(trainingIn,1)
-        media=mean(trainingIn[i,:]);
-        des=std(trainingIn[i,:]);
-        trainingIn[i,:] = normalizar1.(trainingIn[i,:],media,des);
-        testIn[i,:]=normalizar1.(testIn[i,:],media,des);
-    end
-#=
-    KNNmodel = KNeighborsClassifier(vecinos);
-    fit!(KNNmodel, trainingIn', trainingTar');
-    eTraining=confusionMatrix(predict(KNNmodel,trainingIn'),trainingTar');
-    eTest=confusionMatrix(predict(KNNmodel,testIn'),testTar');
-=#
-    error_validacion = []
+    kf = crossvalidation(size(inputs,1),k) 
 
     KNNmodel = KNeighborsClassifier(vecinos)
-    fit!(KNNmodel, trainingIn', trainingTar')
-    eTest = confusionMatrix(predict(KNNmodel, testIn'), testTar')
-    push!(error_validacion, eTest[2])
 
-    println("Donde el error minimo es es: ",minimum(error_validacion))
+    for fold in 1:k
+        trainingIndices = findall(x -> x != fold, kf);
+        testIndices = findall(x -> x == fold, kf);
+
+        # Obtener los datos de entrenamiento y validación
+        trainFoldIn, trainFoldTarget = inputs[trainingIndices, :], targets[trainingIndices,:]
+        testFoldIn, testFoldTarget = inputs[testIndices, :], targets[testIndices,:]
+        
+
+        #=Normalizar=#
+
+        for i in 1:size(trainFoldIn,1)
+            media = mean(trainFoldIn[i,:]);
+            des = std(trainFoldIn[i,:]);
+            trainFoldIn[i,:] = normalizar2.(trainFoldIn[i,:],media,des);
+        end
+
+        for i in 1:size(testFoldIn,1)
+            media = mean(testFoldIn[i,:]);
+            des = std(testFoldIn[i,:]);
+            testFoldIn[i,:] = normalizar2.(testFoldIn[i,:],media,des);
+        end
+
+        fit!(KNNmodel, trainFoldIn, trainFoldTarget);
+        
+        eTraining = confusionMatrix(predict(KNNmodel,trainFoldIn),trainFoldTarget);
+        eTest = confusionMatrix(predict(KNNmodel,testFoldIn),testFoldTarget);
+
+        push!(precision, eTest[1])
+        push!(sensibilidad, eTest[3])
+        push!(f1, eTest[7])
+
+    end
+    
+    precMedia = mean(precision)
+    sensMedia = mean(sensibilidad)
+    f1Media = mean(f1)
+    
+    println("Entrenamiento(Media-Kfold) -> Precision: ", precMedia, " | Sensibilidad: ", sensMedia, " | F1-Score: ", f1Media)
     println()
-    [KNNmodel,eTest,error_validacion]
+
+    [KNNmodel,eTest, precMedia, sensMedia, f1Media]
 end
 
 
@@ -768,23 +837,23 @@ function estadisticas(values, numIt)
         elseif tipoalgo == "svm"
 
             algoritm = sistemaSVM(values[2], values[3], values[4], values[5])
-            push!(precision, ploteable1.(algoritm[2]))
-            push!(sensibilidad, ploteable3.(algoritm[2]))
-            push!(f1, ploteable7.(algoritm[2]))
+            push!(precision, algoritm[3])
+            push!(sensibilidad, algoritm[4])
+            push!(f1, algoritm[5])
 
         elseif tipoalgo == "tree"
 
             algoritm = sistemaArbol(values[2], values[3], values[4])
-            push!(precision, ploteable1.(algoritm[2]))
-            push!(sensibilidad, ploteable3.(algoritm[2]))
-            push!(f1, ploteable7.(algoritm[2]))
+            push!(precision, algoritm[3])
+            push!(sensibilidad, algoritm[4])
+            push!(f1, algoritm[5])
 
         elseif tipoalgo == "knn"
 
             algoritm = sistemaKNN(values[2], values[3], values[4])
-            push!(precision, ploteable1.(algoritm[2]))
-            push!(sensibilidad, ploteable3.(algoritm[2]))
-            push!(f1, ploteable7.(algoritm[2]))
+            push!(precision, algoritm[3])
+            push!(sensibilidad, algoritm[4])
+            push!(f1, algoritm[5])
 
         end
 
@@ -822,12 +891,12 @@ caracteristicas[2] = normalizarCaracteristicas(caracteristicas[2]);
 
 # Graficar los errores
 #=Descomentar para RRNNAA ##############################################################################################
-=#
+
 #redNeuronal = RRNNAA(caracteristicas[1], caracteristicas[2], [36 24], 0, 150, 0.0025)
 
 rrnnaa = ["rrnnaa", caracteristicas[1], caracteristicas[2], [24 24 12], 0, 150, 0.0025]
 stats = estadisticas(rrnnaa, 1)
-
+=#
 #=
 g = plot();
 plot!(ploteable2.(redNeuronal[2]), label="Test Error");
@@ -850,9 +919,9 @@ predecirImagen1(rrnn)
 #SVMaux = sistemaSVM(caracteristicas[1],caracteristicas[2], 15, 40)
 
 svm = ["svm", caracteristicas[1],caracteristicas[2], 15, 40]
-stats = estadisticas(redNeuronal, svm, 50)
-
+stats = estadisticas(svm, 1)
 =#
+
 #=
 g = scatter();
 scatter!(SVMaux[4], label="Distancias")
@@ -864,11 +933,15 @@ display(g)=#
 #=Descomentar para sistemaArbol ##############################################################################################
 
 #Araux = sistemaArbol(caracteristicas[1],caracteristicas[2],10)
-
-tree = ["tree", caracteristicas[1], caracteristicas[2], 10]
-stats = estadisticas(redNeuronal, tree, 50)
-
 =#
+tree = ["tree", caracteristicas[1], caracteristicas[2], 10]
+stats = estadisticas(tree, 2)
+
+tree = ["tree", caracteristicas[1], caracteristicas[2], 15]
+stats = estadisticas(tree, 2)
+
+tree = ["tree", caracteristicas[1], caracteristicas[2], 20]
+stats = estadisticas(tree, 2)
 #show_tree(Araux[4])
 
 
@@ -877,9 +950,9 @@ stats = estadisticas(redNeuronal, tree, 50)
 #KNNaux = sistemaKNN(caracteristicas[1],caracteristicas[2],vecinos)
 
 knn = ["knn", caracteristicas[1], caracteristicas[2], 5]
-stats = estadisticas(redNeuronal, knn, 50)
-
+stats = estadisticas(knn, 1)
 =#
+
 #=
 g = plot();
 plot!(vecinos, KNNaux[3], xlabel="Número de vecinos", ylabel="Error de validación", label="Curva de validación")
